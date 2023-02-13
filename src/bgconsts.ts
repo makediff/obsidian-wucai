@@ -1,0 +1,7 @@
+export class BGCONSTS {
+  static APPID: string = '30'
+  static MARKET_INFO: string = 'obsidian-plugin'
+  static ENDPOINT: string = 'obsidianwucai'
+  static PRINT_LOG: boolean = true
+  static VERSION: string = '23.2.13'
+}
