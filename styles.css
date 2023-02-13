@@ -1,0 +1,51 @@
+.theme-light {
+    --hyper-highlight: var(--text-highlight-bg, #FFF2AC);
+    --error-color: #DB5461;
+    --success-color: #8AAA79;
+    --info-color: var(--text-muted, #000);
+}
+
+.theme-dark {
+    --hyper-highlight: var(--text-highlight-bg, #1C5998);
+    --error-color: #DB5461;
+    --success-color: #8AAA79;
+    --info-color: var(--text-muted, #fff);
+}
+
+.wc-info-container {
+    margin-right: 10px;
+}
+
+.wc-info {
+    color: var(--info-color);
+    font-size: smaller;
+}
+
+.wc-error {
+    color: var(--error-color);
+}
+
+.wc-success {
+    color: var(--success-color);
+}
+
+
+img[alt=wc-book-cover] {
+    max-height: 200px;
+}
+
+.wc-hyper-highlight {
+    background-color: var(--hyper-highlight);
+}
+
+.wc-modal-btns {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.wc-modal-confirmation {
+    margin-top: 1em;
+    font-size: smaller;
+    text-align: right;
+    padding-right: 12px;
+}
