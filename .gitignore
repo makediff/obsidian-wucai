@@ -13,3 +13,5 @@ main.js
 data.json
 .env
 dist
+obsidian-wucai
+*.zip

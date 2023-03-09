@@ -3,5 +3,5 @@ export class BGCONSTS {
   static MARKET_INFO: string = 'obsidian-plugin'
   static ENDPOINT: string = 'obsidianwucai'
   static PRINT_LOG: boolean = false
-  static VERSION: string = '23.2.13'
+  static VERSION: string = '23.3.9'
 }

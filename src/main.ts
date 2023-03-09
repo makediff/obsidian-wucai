@@ -23,6 +23,7 @@ const baseURL = process.env.WUCAI_SERVER_URL || "https://marker.dotalk.cn";
 const WAITING_STATUSES = ['PENDING', 'RECEIVED', 'STARTED', 'RETRY']
 const SUCCESS_STATUSES = ['SYNCING']
 const APP_NAME = 'obsidian'
+const SERVICE_ID = 7
 
 interface WuCaiAuthResponse {
   accessToken: string
@@ -181,7 +182,7 @@ export default class WuCaiPlugin extends Plugin {
   async callApi(url: string, params: any) {
     const reqtime = Math.floor(+new Date() / 1000)
     params['v'] = 1 // version number
-    params['service'] = APP_NAME
+    params['serviceId'] = SERVICE_ID
     url += `?appid=${BGCONSTS.APPID}&ep=${BGCONSTS.ENDPOINT}&version=${BGCONSTS.VERSION}&reqtime=${reqtime}`
     // logger(['call api', url, params])
     return fetch(baseURL + url, {
@@ -655,7 +656,7 @@ export default class WuCaiPlugin extends Plugin {
   async getUserAuthToken(button: HTMLElement, attempt = 0) {
     let uuid = this.getObsidianClientID()
     if (attempt === 0) {
-      window.open(`${baseURL}/page/auth/openapi/gentoken?did=${uuid}&service=${APP_NAME}`)
+      window.open(`${baseURL}/page/gentoken/${SERVICE_ID}/${uuid}`)
     }
     let response
     try {
