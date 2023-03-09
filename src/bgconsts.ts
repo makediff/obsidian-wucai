@@ -6,5 +6,5 @@ export class BGCONSTS {
   static VERSION: string = '23.3.9'
   static VERSION_NUM: number = 230309
   static SERVICE_ID: number = 7
-  static IS_DEBUG: boolean = true
+  static IS_DEBUG: boolean = false
 }
