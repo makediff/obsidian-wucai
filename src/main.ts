@@ -22,6 +22,8 @@ import { BGCONSTS } from './bgconsts'
 const baseURL = process.env.WUCAI_SERVER_URL || 'https://marker.dotalk.cn'
 const WAITING_STATUSES = ['PENDING', 'RECEIVED', 'STARTED', 'RETRY']
 const SUCCESS_STATUSES = ['SYNCING']
+const API_URL_INIT = '/apix/openapi/wucai/sync/init'
+const API_URL_DOWNLOAD = '/apix/openapi/wucai/sync/download'
 
 interface WuCaiAuthResponse {
   accessToken: string
@@ -42,7 +44,7 @@ interface ExportStatusResponse {
 
 interface NoteIdInfo {
   path: string
-  syncTime: number
+  updateAt: number
 }
 
 interface WuCaiPluginSettings {
@@ -178,10 +180,9 @@ export default class WuCaiPlugin extends Plugin {
 
   async callApi(url: string, params: any) {
     const reqtime = Math.floor(+new Date() / 1000)
-    params['v'] = BGCONSTS.VERSION_NUM // version number
+    params['v'] = BGCONSTS.VERSION_NUM
     params['serviceId'] = BGCONSTS.SERVICE_ID
     url += `?appid=${BGCONSTS.APPID}&ep=${BGCONSTS.ENDPOINT}&version=${BGCONSTS.VERSION}&reqtime=${reqtime}`
-    // logger(['call api', url, params])
     return fetch(baseURL + url, {
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' },
       method: 'POST',
@@ -191,9 +192,8 @@ export default class WuCaiPlugin extends Plugin {
 
   // 初始化同步
   async exportInit(buttonContext?: ButtonComponent, auto?: boolean) {
-    const wcDirInfo = this.app.vault.getAbstractFileByPath(this.settings.wuCaiDir)
-    const noteDirDeleted = !wcDirInfo || !(wcDirInfo instanceof TFile)
-    let url = '/apix/openapi/wucai/sync/init'
+    const dirInfo = this.app.vault.getAbstractFileByPath(this.settings.wuCaiDir)
+    const noteDirDeleted = !dirInfo || !(dirInfo instanceof TFile)
     let exportId: number
     if (noteDirDeleted) {
       // 如果文件夹被删除，代表是重新同步
@@ -204,24 +204,24 @@ export default class WuCaiPlugin extends Plugin {
       exportId = this.settings.lastSavedExportID || this.settings.currentSyncExportID || 0
     }
     let params = { noteDirDeleted, exportId, auto: auto && true }
-    let response
+    let rsp
     try {
-      response = await this.callApi(url, params)
+      rsp = await this.callApi(API_URL_INIT, params)
     } catch (e) {
       logger(['WuCai Official plugin: fetch failed in exportInit: ', e])
     }
-    if (!response || !response.ok) {
-      logger(['WuCai Official plugin: bad response in exportInit: ', response])
-      this.handleSyncError(buttonContext, this.getErrorMessageFromResponse(response))
+    if (!rsp || !rsp.ok) {
+      logger(['WuCai Official plugin: bad response in exportInit: ', rsp])
+      this.handleSyncError(buttonContext, this.getErrorMessageFromResponse(rsp))
       return
     }
 
-    let data2 = await response.json()
+    let data2 = await rsp.json()
     if (this.checkResponseBody(buttonContext, data2)) {
       return
     }
 
-    let data: ExportRequestResponse = data2['data']
+    let data: ExportRequestResponse = data2['data'] || {}
     logger(['in exportInit', data, this.settings.lastSavedExportID, this.settings.currentSyncExportID])
     // 通过服务端计算来确定当前需要从哪个id开始同步笔记
     this.settings.currentSyncExportID = data.latestId
@@ -258,17 +258,17 @@ export default class WuCaiPlugin extends Plugin {
     // @ts-ignore
     if (!Platform.isMobileApp) {
       this.statusBar.displayMessage(msg.toLowerCase(), timeout, forcing)
-    } else {
-      if (!show) {
-        new Notice(msg)
-      }
+    } else if (!show) {
+      new Notice(msg)
     }
   }
 
   showInfoStatus(container: HTMLElement, msg: string, className = '') {
     let info = container.find('.wc-info-container')
-    info.setText(msg)
-    info.addClass(className)
+    if (info) {
+      info.setText(msg)
+      info.addClass(className)
+    }
   }
 
   clearInfoStatus(container: HTMLElement) {
@@ -304,11 +304,10 @@ export default class WuCaiPlugin extends Plugin {
     buttonContext: ButtonComponent,
     isOverwrite: boolean
   ): Promise<void> {
-    let url = '/apix/openapi/wucai/sync/download'
     let response
     try {
       // 同步范围: exportID ~ maxExportId, or noteIds
-      response = await this.callApi(url, { exportID, noteIds })
+      response = await this.callApi(API_URL_DOWNLOAD, { exportID, noteIds })
     } catch (e) {
       logger(['WuCai Official plugin: fetch failed in downloadArchive: ', e])
     }
@@ -340,7 +339,6 @@ export default class WuCaiPlugin extends Plugin {
         try {
           // const contents = await entry.getData(new zip.TextWriter())
           const contents = entry.contents
-          let contentToSave = contents
           noteId = '' + entry.noteId
 
           // 计算出笔记的最终路径和名字
@@ -350,19 +348,19 @@ export default class WuCaiPlugin extends Plugin {
           logger(['sync note', originalName, processedFileName])
           let dirPath = originalName.substring(0, originalName.lastIndexOf('/'))
           const fileInfo = await this.vaultfs.getAbstractFileByPath(dirPath)
-          if (!(fileInfo && fileInfo instanceof TFolder)) {
+          if (!fileInfo || !(fileInfo instanceof TFolder)) {
             await this.vaultfs.createFolder(dirPath)
           }
 
           this.settings.notesPathIdsMap[originalName] = noteId
-          this.settings.notesIdsPathMap[noteId] = { path: originalName, syncTime: entry.updateAt }
+          this.settings.notesIdsPathMap[noteId] = { path: originalName, updateAt: entry.updateAt }
 
           const originalFile = await this.vaultfs.getAbstractFileByPath(originalName)
-          if (!(originalFile && originalFile instanceof TFile)) {
-            await this.vaultfs.create(originalName, contentToSave)
+          if (!originalFile || !(originalFile instanceof TFile)) {
+            await this.vaultfs.create(originalName, contents)
           } else {
             if (isOverwrite) {
-              await this.vaultfs.modify(originalFile, contentToSave)
+              await this.vaultfs.modify(originalFile, contents)
             } else {
               // 如果本地文件已经存在，且不允许覆盖的时候，追加新的内容到文件末尾
               const oldCnt = await this.vaultfs.read(originalFile)
@@ -392,15 +390,15 @@ export default class WuCaiPlugin extends Plugin {
     }
     // close the ZipReader
     // await zipReader.close()
-    let isSyncCompleted = false
+    let isCompleted = false
     if (isPartsDownloadLogic) {
       // 当前是指定笔记进行同步，所以每次就代表是一组同步完成
-      isSyncCompleted = true
+      isCompleted = true
     } else {
       // 当前是通过偏移量范围进行同步
-      isSyncCompleted = entriesCount <= 0
+      isCompleted = entriesCount <= 0
     }
-    if (isSyncCompleted) {
+    if (isCompleted) {
       await this.acknowledgeSyncCompleted(buttonContext)
       this.handleSyncSuccess(buttonContext, 'Synced!', exportID)
       this.notice('WuCai sync completed', true, 1, true)
@@ -429,7 +427,7 @@ export default class WuCaiPlugin extends Plugin {
     } catch (e) {
       logger(['WuCai Official plugin: fetch failed to acknowledged sync: ', e])
     }
-    if (!rsp && !rsp.ok) {
+    if (rsp && !rsp.ok) {
       logger(['WuCai Official plugin: bad response in acknowledge sync: ', rsp])
       this.handleSyncError(buttonContext, this.getErrorMessageFromResponse(rsp))
     }
