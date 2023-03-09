@@ -1,8 +1,6 @@
 import {
   App,
   ButtonComponent,
-  DataAdapter,
-  debounce,
   Editor,
   MarkdownView,
   Modal,
@@ -12,18 +10,18 @@ import {
   PluginSettingTab,
   Setting,
   Vault,
+  Platform,
+  TFolder,
+  TFile,
 } from 'obsidian'
 import * as zip from '@zip.js/zip.js'
 import { StatusBar } from './status'
 import { BGCONSTS } from './bgconsts'
-import { title } from 'process'
 
 // the process.env variable will be replaced by its target value in the output main.js file
-const baseURL = process.env.WUCAI_SERVER_URL || "https://marker.dotalk.cn";
+const baseURL = process.env.WUCAI_SERVER_URL || 'https://marker.dotalk.cn'
 const WAITING_STATUSES = ['PENDING', 'RECEIVED', 'STARTED', 'RETRY']
 const SUCCESS_STATUSES = ['SYNCING']
-const APP_NAME = 'obsidian'
-const SERVICE_ID = 7
 
 interface WuCaiAuthResponse {
   accessToken: string
@@ -108,8 +106,7 @@ function localize(msg: string): string {
 
 export default class WuCaiPlugin extends Plugin {
   settings: WuCaiPluginSettings
-  fs: DataAdapter
-  vault: Vault
+  vaultfs: Vault
   scheduleInterval: null | number = null
   statusBar: StatusBar
 
@@ -181,8 +178,8 @@ export default class WuCaiPlugin extends Plugin {
 
   async callApi(url: string, params: any) {
     const reqtime = Math.floor(+new Date() / 1000)
-    params['v'] = 1 // version number
-    params['serviceId'] = SERVICE_ID
+    params['v'] = BGCONSTS.VERSION_NUM // version number
+    params['serviceId'] = BGCONSTS.SERVICE_ID
     url += `?appid=${BGCONSTS.APPID}&ep=${BGCONSTS.ENDPOINT}&version=${BGCONSTS.VERSION}&reqtime=${reqtime}`
     // logger(['call api', url, params])
     return fetch(baseURL + url, {
@@ -194,7 +191,8 @@ export default class WuCaiPlugin extends Plugin {
 
   // 初始化同步
   async exportInit(buttonContext?: ButtonComponent, auto?: boolean) {
-    const noteDirDeleted = !(await this.app.vault.adapter.exists(this.settings.wuCaiDir))
+    const wcDirInfo = this.app.vault.getAbstractFileByPath(this.settings.wuCaiDir)
+    const noteDirDeleted = !wcDirInfo || !(wcDirInfo instanceof TFile)
     let url = '/apix/openapi/wucai/sync/init'
     let exportId: number
     if (noteDirDeleted) {
@@ -258,7 +256,7 @@ export default class WuCaiPlugin extends Plugin {
       new Notice(msg)
     }
     // @ts-ignore
-    if (!this.app.isMobile) {
+    if (!Platform.isMobileApp) {
       this.statusBar.displayMessage(msg.toLowerCase(), timeout, forcing)
     } else {
       if (!show) {
@@ -327,7 +325,7 @@ export default class WuCaiPlugin extends Plugin {
     }
 
     let entries = data2['data']['entries'] || []
-    this.fs = this.app.vault.adapter
+    this.vaultfs = this.app.vault
 
     // const blobReader = new zip.BlobReader(blob)
     // const zipReader = new zip.ZipReader(blobReader)
@@ -351,22 +349,28 @@ export default class WuCaiPlugin extends Plugin {
 
           logger(['sync note', originalName, processedFileName])
           let dirPath = originalName.substring(0, originalName.lastIndexOf('/'))
-          const exists = await this.fs.exists(dirPath)
-          if (!exists) {
-            await this.fs.mkdir(dirPath)
+          const fileInfo = await this.vaultfs.getAbstractFileByPath(dirPath)
+          if (!(fileInfo && fileInfo instanceof TFolder)) {
+            await this.vaultfs.createFolder(dirPath)
           }
 
           this.settings.notesPathIdsMap[originalName] = noteId
           this.settings.notesIdsPathMap[noteId] = { path: originalName, syncTime: entry.updateAt }
 
-          if ((await this.fs.exists(originalName)) && !isOverwrite) {
-            // 如果本地文件已经存在，且不允许覆盖的时候，追加新的内容到文件末尾
-            const existingContent = await this.fs.read(originalName)
-            if (existingContent !== contents) {
-              contentToSave = existingContent + contents
+          const originalFile = await this.vaultfs.getAbstractFileByPath(originalName)
+          if (!(originalFile && originalFile instanceof TFile)) {
+            await this.vaultfs.create(originalName, contentToSave)
+          } else {
+            if (isOverwrite) {
+              await this.vaultfs.modify(originalFile, contentToSave)
+            } else {
+              // 如果本地文件已经存在，且不允许覆盖的时候，追加新的内容到文件末尾
+              const oldCnt = await this.vaultfs.read(originalFile)
+              if (oldCnt !== contents) {
+                await this.vaultfs.append(originalFile, '\n' + contents)
+              }
             }
           }
-          await this.fs.write(originalName, contentToSave)
           await this.saveSettings()
 
           // 在同步的过程中不断的更新同步位置
@@ -397,16 +401,18 @@ export default class WuCaiPlugin extends Plugin {
       isSyncCompleted = entriesCount <= 0
     }
     if (isSyncCompleted) {
-      // 同步完成
       await this.acknowledgeSyncCompleted(buttonContext)
       this.handleSyncSuccess(buttonContext, 'Synced!', exportID)
       this.notice('WuCai sync completed', true, 1, true)
       // @ts-ignore
-      if (this.app.isMobile) {
+      if (Platform.isMobileApp) {
         this.notice("If you don't see all of your WuCai files reload obsidian app", true)
       }
-    } else {
-      // 继续同步
+    } else if (BGCONSTS.IS_DEBUG) {
+      await this.acknowledgeSyncCompleted(buttonContext)
+      this.handleSyncSuccess(buttonContext, 'Synced! debug mode', exportID)
+      this.notice('WuCai sync completed, in debug mode', true, 1, true)
+    } else if (!BGCONSTS.IS_DEBUG) {
       this.handleSyncSuccess(buttonContext, 'syncing', exportID)
       this.notice('WuCai is syncing, ' + exportID, true, 1, true)
       await new Promise((resolve) => setTimeout(resolve, 5000))
@@ -415,18 +421,17 @@ export default class WuCaiPlugin extends Plugin {
   }
 
   async acknowledgeSyncCompleted(buttonContext: ButtonComponent) {
-    let response
+    let rsp
     let url = '/apix/openapi/wucai/sync/ack'
     try {
-      let params = { service: APP_NAME, lastSavedExportID: this.settings.lastSavedExportID }
-      response = await this.callApi(url, params)
+      let params = { lastSavedExportID: this.settings.lastSavedExportID }
+      rsp = await this.callApi(url, params)
     } catch (e) {
       logger(['WuCai Official plugin: fetch failed to acknowledged sync: ', e])
     }
-    if (!response && !response.ok) {
-      logger(['WuCai Official plugin: bad response in acknowledge sync: ', response])
-      this.handleSyncError(buttonContext, this.getErrorMessageFromResponse(response))
-      return
+    if (!rsp && !rsp.ok) {
+      logger(['WuCai Official plugin: bad response in acknowledge sync: ', rsp])
+      this.handleSyncError(buttonContext, this.getErrorMessageFromResponse(rsp))
     }
   }
 
@@ -461,9 +466,7 @@ export default class WuCaiPlugin extends Plugin {
   }
 
   async addNoteToRefresh(noteId: string) {
-    let notesToRefresh = this.settings.notesToRefresh
-    notesToRefresh.push(noteId)
-    this.settings.notesToRefresh = notesToRefresh
+    this.settings.notesToRefresh.push(noteId)
     await this.saveSettings()
   }
 
@@ -489,7 +492,7 @@ export default class WuCaiPlugin extends Plugin {
 
   async onload() {
     // @ts-ignore
-    if (!this.app.isMobile) {
+    if (!Platform.isMobileApp) {
       this.statusBar = new StatusBar(this.addStatusBarItem())
       this.registerInterval(window.setInterval(() => this.statusBar.display(), 1000))
     }
@@ -549,7 +552,7 @@ export default class WuCaiPlugin extends Plugin {
       }
     }
     this.addCommand({
-      id: 'wucai-official-sync',
+      id: 'sync',
       name: 'Sync your data now',
       callback: () => {
         this.startSync()
@@ -561,7 +564,7 @@ export default class WuCaiPlugin extends Plugin {
     //   callback: () => window.open(`${baseURL}/export/obsidian/preferences`),
     // })
     this.addCommand({
-      id: 'wucai-official-reimport-file',
+      id: 'reimport',
       name: 'Delete and reimport this document',
       editorCheckCallback: (checking: boolean, editor: Editor, view: MarkdownView) => {
         const activeFilePath = view.file.path
@@ -580,8 +583,8 @@ export default class WuCaiPlugin extends Plugin {
           const cancelBtn = buttonsContainer.createEl('button', { text: 'Cancel' })
           const confirmBtn = buttonsContainer.createEl('button', { text: 'Proceed', cls: 'mod-warning' })
           const showConfContainer = modal.contentEl.createEl('div', { cls: 'wc-modal-confirmation' })
-          showConfContainer.createEl('label', { attr: { for: 'rw-ask-nl' }, text: "on't ask me in the future" })
-          const showConf = showConfContainer.createEl('input', { type: 'checkbox', attr: { name: 'rw-ask-nl' } })
+          showConfContainer.createEl('label', { attr: { for: 'wc-ask-nl' }, text: "on't ask me in the future" })
+          const showConf = showConfContainer.createEl('input', { type: 'checkbox', attr: { name: 'wc-ask-nl' } })
           showConf.addEventListener('change', (ev) => {
             // @ts-ignore
             this.settings.reimportShowConfirmation = !ev.target.checked
@@ -656,7 +659,7 @@ export default class WuCaiPlugin extends Plugin {
   async getUserAuthToken(button: HTMLElement, attempt = 0) {
     let uuid = this.getObsidianClientID()
     if (attempt === 0) {
-      window.open(`${baseURL}/page/gentoken/${SERVICE_ID}/${uuid}`)
+      window.open(`${baseURL}/page/gentoken/${BGCONSTS.SERVICE_ID}/${uuid}`)
     }
     let response
     try {
@@ -705,7 +708,7 @@ class WuCaiSettingTab extends PluginSettingTab {
     containerEl
       .createEl('p', { text: 'Created by ' })
       .createEl('a', { text: '希果壳五彩', href: 'https://www.dotalk.cn/product/wucai' })
-    containerEl.getElementsByTagName('p')[0].appendText(' 📚🌈')
+    containerEl.getElementsByTagName('p')[0].appendText(' 🚀🚀')
     containerEl.createEl('h2', { text: 'Settings' })
 
     let token = this.plugin.settings.token
@@ -713,7 +716,7 @@ class WuCaiSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName('Sync your WuCai data with Obsidian')
         .setDesc('On first sync, the WuCai plugin will create a new folder containing all your highlights')
-        .setClass('rw-setting-sync')
+        .setClass('wc-setting-sync')
         .addButton((button) => {
           button
             .setCta()
@@ -736,14 +739,14 @@ class WuCaiSettingTab extends PluginSettingTab {
             })
         })
       let el = containerEl.createEl('div', { cls: 'wc-info-container' })
-      containerEl.find('.rw-setting-sync > .setting-item-control ').prepend(el)
+      containerEl.find('.wc-setting-sync > .setting-item-control ').prepend(el)
 
       new Setting(containerEl)
         .setName('Customize formatting options')
         .setDesc('You can customize which items export to Obsidian and how they appear from the WuCai website')
         .addButton((button) => {
           button.setButtonText('Customize').onClick(() => {
-            window.open(`${baseURL}/page/export/obsidian/preferences`)
+            window.open(`${baseURL}/page/plugins/obsidian/preferences`)
           })
         })
 
@@ -811,7 +814,7 @@ class WuCaiSettingTab extends PluginSettingTab {
 
       if (this.plugin.settings.lastSyncFailed) {
         this.plugin.showInfoStatus(
-          containerEl.find('.rw-setting-sync .wc-info-container').parentElement,
+          containerEl.find('.wc-setting-sync .wc-info-container').parentElement,
           'Last sync failed',
           'wc-error'
         )
@@ -820,7 +823,7 @@ class WuCaiSettingTab extends PluginSettingTab {
       // 没有配置 token 的情况
       new Setting(containerEl)
         .setName('Connect Obsidian to WuCai')
-        .setClass('rw-setting-connect')
+        .setClass('wc-setting-connect')
         .setDesc('The WuCai plugin enables automatic syncing of all your highlights . Note: Requires WuCai account.')
         .addButton((button) => {
           button
@@ -834,7 +837,7 @@ class WuCaiSettingTab extends PluginSettingTab {
             })
         })
       let el = containerEl.createEl('div', { cls: 'wc-info-container' })
-      containerEl.find('.rw-setting-connect > .setting-item-control ').prepend(el)
+      containerEl.find('.wc-setting-connect > .setting-item-control ').prepend(el)
     }
     const help = containerEl.createEl('p')
     help.innerHTML = "Question? Please see our <a href='https://www.dotalk.cn/s/M7'>feedback</a> 🙂"
