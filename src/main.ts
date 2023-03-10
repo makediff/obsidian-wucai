@@ -193,7 +193,7 @@ export default class WuCaiPlugin extends Plugin {
   // 初始化同步
   async exportInit(buttonContext?: ButtonComponent, auto?: boolean) {
     const dirInfo = this.app.vault.getAbstractFileByPath(this.settings.wuCaiDir)
-    const noteDirDeleted = !dirInfo || !(dirInfo instanceof TFile)
+    const noteDirDeleted = !dirInfo || !(dirInfo instanceof TFolder)
     let exportId: number
     if (noteDirDeleted) {
       // 如果文件夹被删除，代表是重新同步
@@ -245,7 +245,7 @@ export default class WuCaiPlugin extends Plugin {
       await this.exportInit(buttonContext)
     } else if (SUCCESS_STATUSES.includes(data.taskStatus)) {
       this.notice('Syncing WuCai data')
-      return this.downloadArchive(exportId, [], buttonContext, false)
+      return this.downloadArchive(data.latestId, [], buttonContext, false)
     } else {
       this.handleSyncError(buttonContext, 'Sync failed,' + data.taskStatus)
     }
