@@ -19,7 +19,8 @@ import { StatusBar } from './status'
 import { BGCONSTS } from './bgconsts'
 
 // the process.env variable will be replaced by its target value in the output main.js file
-const baseURL = process.env.WUCAI_SERVER_URL || 'https://marker.dotalk.cn'
+const baseURL = 'http://localhost:22021' || 'https://marker.dotalk.cn'
+// const baseURL = process.env.WUCAI_SERVER_URL || 'https://marker.dotalk.cn'
 const WAITING_STATUSES = ['PENDING', 'RECEIVED', 'STARTED', 'RETRY']
 const SUCCESS_STATUSES = ['SYNCING']
 const API_URL_INIT = '/apix/openapi/wucai/sync/init'
@@ -29,14 +30,14 @@ interface WuCaiAuthResponse {
   accessToken: string
 }
 
-interface ExportRequestResponse {
-  latestId: number
-  totalNotes: number
-  notesExported: number
-  taskStatus: string
+interface WuCaiExportLastCursor {
+  lastId: number
+  lastHighlightPKID: number
+  lastTime: number
 }
 
-interface ExportStatusResponse {
+interface ExportInitRequestResponse {
+  lastCursor: WuCaiExportLastCursor
   totalNotes: number
   notesExported: number
   taskStatus: string
@@ -54,14 +55,14 @@ interface WuCaiPluginSettings {
   frequency: string
   triggerOnLoad: boolean
   lastSyncFailed: boolean
-  lastSavedExportID: number
-  currentSyncExportID: number
+  reimportShowConfirmation: boolean
+
+  lastCursor: WuCaiExportLastCursor
+
   refreshNotes: boolean
   notesToRefresh: Array<string>
   notesPathIdsMap: { [key: string]: string } // key is path(also filename), value is noteId, ==> path vs. noteId
   notesIdsPathMap: { [key: string]: NoteIdInfo } // key is nodeId, value is path
-  // renameNotes: { [key: string]: number } // renamed note Ids, key is noteId, value is always 1
-  reimportShowConfirmation: boolean
 }
 
 // define our initial settings
@@ -72,31 +73,34 @@ const DEFAULT_SETTINGS: WuCaiPluginSettings = {
   triggerOnLoad: true,
   isSyncing: false,
   lastSyncFailed: false,
-  lastSavedExportID: 0, // 最后同步成功的位置
-  currentSyncExportID: 0,
   refreshNotes: false,
   notesToRefresh: [],
   notesPathIdsMap: {},
   notesIdsPathMap: {},
   reimportShowConfirmation: true,
-}
-
-const localizeData = {
-  /**
-   * Run sync
-   * Synced
-   * Run sync
-   * Exporting WuCai data
-   * Building export...
-   * sync service expried
-   * Sync failed
-   * need advanced permission
-   */
-  CN: {
-    'call api failed': '',
-    "Can't connect to server": '',
+  lastCursor: {
+    lastId: 0,
+    lastHighlightPKID: 0,
+    lastTime: 0,
   },
 }
+
+// const localizeData = {
+//   /**
+//    * Run sync
+//    * Synced
+//    * Run sync
+//    * Exporting WuCai data
+//    * Building export...
+//    * sync service expried
+//    * Sync failed
+//    * need advanced permission
+//    */
+//   CN: {
+//     'call api failed': '',
+//     "Can't connect to server": '',
+//   },
+// }
 
 function logger(msg: any) {
   BGCONSTS.PRINT_LOG && console.log(msg)
@@ -108,7 +112,6 @@ function localize(msg: string): string {
 
 export default class WuCaiPlugin extends Plugin {
   settings: WuCaiPluginSettings
-  vaultfs: Vault
   scheduleInterval: null | number = null
   statusBar: StatusBar
 
@@ -159,15 +162,16 @@ export default class WuCaiPlugin extends Plugin {
 
   clearSettingsAfterRun() {
     this.settings.isSyncing = false
-    this.settings.currentSyncExportID = 0
   }
 
-  handleSyncSuccess(buttonContext: ButtonComponent, msg: string = 'Synced', exportID: number = null) {
+  handleSyncSuccess(buttonContext: ButtonComponent, msg: string = 'Synced', lastCursor: WuCaiExportLastCursor = null) {
     this.clearSettingsAfterRun()
     this.settings.lastSyncFailed = false
-    this.settings.currentSyncExportID = 0
-    if (exportID && exportID > this.settings.lastSavedExportID) {
-      this.settings.lastSavedExportID = exportID
+    if (lastCursor) {
+      let tmpCursor = this.getNewLastCursor(lastCursor, this.settings.lastCursor)
+      if (tmpCursor) {
+        this.settings.lastCursor = tmpCursor
+      }
     }
     this.saveSettings()
     // if we have a button context, update the text on it
@@ -194,16 +198,17 @@ export default class WuCaiPlugin extends Plugin {
   async exportInit(buttonContext?: ButtonComponent, auto?: boolean) {
     const dirInfo = this.app.vault.getAbstractFileByPath(this.settings.wuCaiDir)
     const noteDirDeleted = !dirInfo || !(dirInfo instanceof TFolder)
-    let exportId: number
+    // let exportId: number
     if (noteDirDeleted) {
       // 如果文件夹被删除，代表是重新同步
-      exportId = 0
-      this.settings.lastSavedExportID = 0
-      this.settings.currentSyncExportID = 0
-    } else {
-      exportId = this.settings.lastSavedExportID || this.settings.currentSyncExportID || 0
+      this.settings.lastCursor = {
+        lastHighlightPKID: 0,
+        lastId: 0,
+        lastTime: 0,
+      }
     }
-    let params = { noteDirDeleted, exportId, auto: auto && true }
+    let lastCursor = this.settings.lastCursor
+    let params = { noteDirDeleted, auto: auto && true, lastCursor }
     let rsp
     try {
       rsp = await this.callApi(API_URL_INIT, params)
@@ -221,14 +226,18 @@ export default class WuCaiPlugin extends Plugin {
       return
     }
 
-    let data: ExportRequestResponse = data2['data'] || {}
-    logger(['in exportInit', data, this.settings.lastSavedExportID, this.settings.currentSyncExportID])
+    let data: ExportInitRequestResponse = data2['data'] || {}
+    logger(['in exportInit', data, this.settings.lastCursor])
+
     // 通过服务端计算来确定当前需要从哪个id开始同步笔记
-    this.settings.currentSyncExportID = data.latestId
-    await this.saveSettings()
+    let tmpCursor = this.getNewLastCursor(data.lastCursor, this.settings.lastCursor)
+    if (tmpCursor) {
+      this.settings.lastCursor = tmpCursor
+      await this.saveSettings()
+    }
 
     if ('SYNCED' === data.taskStatus) {
-      this.handleSyncSuccess(buttonContext, 'Synced', data.latestId)
+      this.handleSyncSuccess(buttonContext, 'Synced', this.settings.lastCursor)
       let msg = 'Latest WuCai sync already happened on your other device. Data should be up to date'
       this.notice(msg, false, 4, true)
     } else if ('EXPIRED' == data.taskStatus) {
@@ -245,7 +254,7 @@ export default class WuCaiPlugin extends Plugin {
       await this.exportInit(buttonContext)
     } else if (SUCCESS_STATUSES.includes(data.taskStatus)) {
       this.notice('Syncing WuCai data')
-      return this.downloadArchive(data.latestId, [], buttonContext, false)
+      return this.downloadArchive(this.settings.lastCursor, [], buttonContext, false)
     } else {
       this.handleSyncError(buttonContext, 'Sync failed,' + data.taskStatus)
     }
@@ -297,17 +306,33 @@ export default class WuCaiPlugin extends Plugin {
     return ''
   }
 
+  getNewLastCursor(lc: WuCaiExportLastCursor, savedCusor: WuCaiExportLastCursor): WuCaiExportLastCursor {
+    if (!lc) {
+      // no need change
+      return
+    }
+    savedCusor = savedCusor || { lastId: 0, lastHighlightPKID: 0, lastTime: 0 }
+    let lastId = savedCusor.lastId || 0
+    let lastHighlightPKID = savedCusor.lastHighlightPKID || 0
+    let lastTime = savedCusor.lastTime || 0
+    return {
+      lastId: lc.lastId > lastId ? lc.lastId : lastId,
+      lastHighlightPKID: lc.lastHighlightPKID > lastHighlightPKID ? lc.lastHighlightPKID : lastHighlightPKID,
+      lastTime: lc.lastTime > lastTime ? lc.lastTime : lastTime,
+    }
+  }
+
   // 指定范围或指定笔记进行同步
   async downloadArchive(
-    exportID: number,
+    lastCursor: WuCaiExportLastCursor,
     noteIds: Array<number>,
     buttonContext: ButtonComponent,
     isOverwrite: boolean
   ): Promise<void> {
     let response
     try {
-      // 同步范围: exportID ~ maxExportId, or noteIds
-      response = await this.callApi(API_URL_DOWNLOAD, { exportID, noteIds })
+      // 同步范围: lastCursor, or noteIds
+      response = await this.callApi(API_URL_DOWNLOAD, { lastCursor, noteIds })
     } catch (e) {
       logger(['WuCai Official plugin: fetch failed in downloadArchive: ', e])
     }
@@ -324,72 +349,85 @@ export default class WuCaiPlugin extends Plugin {
     }
 
     let entries = data2['data']['entries'] || []
-    this.vaultfs = this.app.vault
 
     // const blobReader = new zip.BlobReader(blob)
     // const zipReader = new zip.ZipReader(blobReader)
     // const entries = await zipReader.getEntries()
-    this.notice('Saving files...', false, 30)
+
+    // 23.3.22 不用提示了
+    // this.notice('Saving files...', false, 30)
+
+    // 是否为定向同步
     const isPartsDownloadLogic: boolean = noteIds.length > 0
     let entriesCount = entries.length
-    if (entriesCount > 0) {
-      for (const entry of entries) {
-        let noteId: string
-        const processedFileName = normalizePath(entry.filename.replace(/^WuCai/, this.settings.wuCaiDir))
-        try {
-          // const contents = await entry.getData(new zip.TextWriter())
-          const contents = entry.contents
-          noteId = '' + entry.noteId
 
-          // 计算出笔记的最终路径和名字
-          let originalName = this.findLocalFileNameByNoteId(noteId) || processedFileName
-          originalName = originalName.replace(/\/*$/, '')
+    // 保存同步过来的文件
+    for (const entry of entries) {
+      let noteId: string
+      const processedFileName = normalizePath(entry.filename.replace(/^WuCai/, this.settings.wuCaiDir))
+      try {
+        // const contents = await entry.getData(new zip.TextWriter())
+        const contents = entry.contents
+        noteId = '' + entry.noteId
 
-          logger(['sync note', originalName, processedFileName])
-          let dirPath = originalName.substring(0, originalName.lastIndexOf('/'))
-          const fileInfo = await this.vaultfs.getAbstractFileByPath(dirPath)
-          if (!fileInfo || !(fileInfo instanceof TFolder)) {
-            await this.vaultfs.createFolder(dirPath)
-          }
+        // 计算出笔记的最终路径和名字
+        let originalName = this.findLocalFileNameByNoteId(noteId) || processedFileName
+        originalName = originalName.replace(/\/*$/, '')
 
-          this.settings.notesPathIdsMap[originalName] = noteId
-          this.settings.notesIdsPathMap[noteId] = { path: originalName, updateAt: entry.updateAt }
+        logger(['sync note', originalName, processedFileName])
+        let dirPath = originalName.substring(0, originalName.lastIndexOf('/'))
+        const fileInfo = await this.app.vault.getAbstractFileByPath(dirPath)
+        if (!fileInfo || !(fileInfo instanceof TFolder)) {
+          await this.app.vault.createFolder(dirPath)
+        }
 
-          const originalFile = await this.vaultfs.getAbstractFileByPath(originalName)
-          if (!originalFile || !(originalFile instanceof TFile)) {
-            await this.vaultfs.create(originalName, contents)
+        this.settings.notesPathIdsMap[originalName] = noteId
+        this.settings.notesIdsPathMap[noteId] = { path: originalName, updateAt: entry.updateAt }
+
+        const originalFile = await this.app.vault.getAbstractFileByPath(originalName)
+        if (!originalFile || !(originalFile instanceof TFile)) {
+          await this.app.vault.create(originalName, contents)
+        } else {
+          if (isOverwrite) {
+            await this.app.vault.modify(originalFile, contents)
           } else {
-            if (isOverwrite) {
-              await this.vaultfs.modify(originalFile, contents)
-            } else {
-              // 如果本地文件已经存在，且不允许覆盖的时候，追加新的内容到文件末尾
-              const oldCnt = await this.vaultfs.read(originalFile)
-              if (oldCnt !== contents) {
-                await this.vaultfs.append(originalFile, '\n' + contents)
-              }
+            // 如果本地文件已经存在，且不允许覆盖的时候，追加新的内容到文件末尾
+            const oldCnt = await this.app.vault.read(originalFile)
+            if (oldCnt !== contents) {
+              await this.app.vault.append(originalFile, '\n' + contents)
             }
           }
-          await this.saveSettings()
+        }
 
-          // 在同步的过程中不断的更新同步位置
-          if (!isPartsDownloadLogic && entry.exportID && entry.exportID > exportID) {
-            exportID = entry.exportID
-            if (exportID > this.settings.lastSavedExportID) {
-              this.settings.lastSavedExportID = exportID
-            }
+        // 在同步的过程中不断的更新同步位置
+        // 不是定向同步时，记录同步位置
+        if (!isPartsDownloadLogic) {
+          let tmpCursor = this.getNewLastCursor(
+            {
+              lastId: entry.exportID || 0,
+              lastHighlightPKID: entry.highlightPKID || 0,
+              lastTime: entry.updateAt || 0,
+            },
+            this.settings.lastCursor
+          )
+          if (tmpCursor) {
+            this.settings.lastCursor = tmpCursor
           }
-        } catch (e) {
-          logger([`WuCai Official plugin: error writing ${processedFileName}:`, e])
-          this.notice(`WuCai: error while writing ${processedFileName}: ${e}`, true, 4, true)
-          if (noteId) {
-            this.settings.notesToRefresh.push(noteId)
-            await this.saveSettings()
-          }
+        }
+        await this.saveSettings()
+      } catch (e) {
+        logger([`WuCai Official plugin: error writing ${processedFileName}:`, e])
+        this.notice(`WuCai: error while writing ${processedFileName}: ${e}`, true, 4, true)
+        if (noteId) {
+          this.settings.notesToRefresh.push(noteId)
+          await this.saveSettings()
         }
       }
     }
+
     // close the ZipReader
     // await zipReader.close()
+
     let isCompleted = false
     if (isPartsDownloadLogic) {
       // 当前是指定笔记进行同步，所以每次就代表是一组同步完成
@@ -400,7 +438,7 @@ export default class WuCaiPlugin extends Plugin {
     }
     if (isCompleted) {
       await this.acknowledgeSyncCompleted(buttonContext)
-      this.handleSyncSuccess(buttonContext, 'Synced!', exportID)
+      this.handleSyncSuccess(buttonContext, 'Synced!', this.settings.lastCursor)
       this.notice('WuCai sync completed', true, 1, true)
       // @ts-ignore
       if (Platform.isMobileApp) {
@@ -408,13 +446,13 @@ export default class WuCaiPlugin extends Plugin {
       }
     } else if (BGCONSTS.IS_DEBUG) {
       await this.acknowledgeSyncCompleted(buttonContext)
-      this.handleSyncSuccess(buttonContext, 'Synced! debug mode', exportID)
+      this.handleSyncSuccess(buttonContext, 'Synced! debug mode', this.settings.lastCursor)
       this.notice('WuCai sync completed, in debug mode', true, 1, true)
     } else if (!BGCONSTS.IS_DEBUG) {
-      this.handleSyncSuccess(buttonContext, 'syncing', exportID)
-      this.notice('WuCai is syncing, ' + exportID, true, 1, true)
+      this.handleSyncSuccess(buttonContext, 'syncing', this.settings.lastCursor)
+      // this.notice('WuCai is syncing, ' + exportID, true, 1, true)
       await new Promise((resolve) => setTimeout(resolve, 5000))
-      this.downloadArchive(exportID, [], buttonContext, isOverwrite)
+      this.downloadArchive(this.settings.lastCursor, [], buttonContext, isOverwrite)
     }
   }
 
@@ -422,7 +460,7 @@ export default class WuCaiPlugin extends Plugin {
     let rsp
     let url = '/apix/openapi/wucai/sync/ack'
     try {
-      let params = { lastSavedExportID: this.settings.lastSavedExportID }
+      let params = { lastCursor: this.settings.lastCursor }
       rsp = await this.callApi(url, params)
     } catch (e) {
       logger(['WuCai Official plugin: fetch failed to acknowledged sync: ', e])
@@ -459,7 +497,7 @@ export default class WuCaiPlugin extends Plugin {
         break
       }
     }
-    this.downloadArchive(0, newNoteIds, null, false)
+    this.downloadArchive(null, newNoteIds, null, false)
     this.settings.notesToRefresh = this.settings.notesToRefresh.filter((n) => !newNoteIds.includes(parseInt(n)))
   }
 
@@ -474,7 +512,7 @@ export default class WuCaiPlugin extends Plugin {
       this.notice('Failed to reimport. note id not found', true)
       return
     }
-    this.downloadArchive(0, [parseInt(noteId)], null, isOverwrite)
+    this.downloadArchive(null, [parseInt(noteId)], null, isOverwrite)
   }
 
   startSync() {
@@ -495,60 +533,57 @@ export default class WuCaiPlugin extends Plugin {
       this.registerInterval(window.setInterval(() => this.statusBar.display(), 1000))
     }
     await this.loadSettings()
+    this.settings.isSyncing = false
     this.refreshNoteExport()
-    this.app.vault.on('delete', async (file) => {
-      // 将删除的文件放到待更新列表，这样下次就可以重新同步删除的问题
-      const noteID = this.settings.notesPathIdsMap[file.path]
-      if (noteID) {
-        await this.addNoteToRefresh(noteID)
-      }
-      delete this.settings.notesPathIdsMap[file.path]
-      delete this.settings.notesIdsPathMap[noteID]
-      this.saveSettings()
-      if (noteID) {
-        this.refreshNoteExport()
-      }
-    })
-    this.app.vault.on('rename', (file, oldPath) => {
-      // 如果是五彩划线目录里的文件，在重命名的时候，进行关联，以保证下次同步能找到相应的文件
-      if (!oldPath.startsWith(this.settings.wuCaiDir + '/')) {
-        return
-      }
-      logger(['rename path', file, oldPath])
-      const noteID = this.settings.notesPathIdsMap[oldPath]
-      if (!noteID) {
-        // 检测是否是修改的目录，如果是目录，则需要更新目录下的所有映射关系
-        let oldPathLength = oldPath.length
-        for (let tmpNoteId in this.settings.notesIdsPathMap) {
-          let note: NoteIdInfo = this.settings.notesIdsPathMap[tmpNoteId]
-          if (!note || note == undefined) {
-            continue
-          }
-          let tmpOldPath = note.path
-          if (tmpOldPath.startsWith(oldPath + '/')) {
-            // 更新此文件夹下面的文件映射关系
-            let tmpNewPath = file.path + tmpOldPath.substring(oldPathLength)
-            logger(['rename map, ', oldPath, tmpOldPath, tmpNewPath])
-            delete this.settings.notesPathIdsMap[tmpOldPath]
-            this.settings.notesPathIdsMap[tmpNewPath] = tmpNoteId
-            this.settings.notesIdsPathMap[tmpNoteId].path = tmpNewPath
-          }
+    this.registerEvent(
+      this.app.vault.on('delete', async (file) => {
+        // 将删除的文件放到待更新列表，这样下次就可以重新同步删除的问题
+        const noteID = this.settings.notesPathIdsMap[file.path]
+        if (noteID) {
+          await this.addNoteToRefresh(noteID)
         }
-        return
-      }
-      this.settings.notesPathIdsMap[file.path] = noteID
-      this.settings.notesIdsPathMap[noteID].path = file.path
-      delete this.settings.notesPathIdsMap[oldPath]
-      this.saveSettings()
-    })
-    if (this.settings.isSyncing) {
-      if (this.settings.currentSyncExportID) {
-        await this.exportInit()
-      } else {
-        this.settings.isSyncing = false
-        await this.saveSettings()
-      }
-    }
+        delete this.settings.notesPathIdsMap[file.path]
+        delete this.settings.notesIdsPathMap[noteID]
+        this.saveSettings()
+        if (noteID) {
+          this.refreshNoteExport()
+        }
+      })
+    )
+    this.registerEvent(
+      this.app.vault.on('rename', (file, oldPath) => {
+        // 如果是五彩划线目录里的文件，在重命名的时候，进行关联，以保证下次同步能找到相应的文件
+        if (!oldPath.startsWith(this.settings.wuCaiDir + '/')) {
+          return
+        }
+        logger(['rename path', file, oldPath])
+        const noteID = this.settings.notesPathIdsMap[oldPath]
+        if (!noteID) {
+          // 检测是否是修改的目录，如果是目录，则需要更新目录下的所有映射关系
+          let oldPathLength = oldPath.length
+          for (let tmpNoteId in this.settings.notesIdsPathMap) {
+            let note: NoteIdInfo = this.settings.notesIdsPathMap[tmpNoteId]
+            if (!note || note == undefined) {
+              continue
+            }
+            let tmpOldPath = note.path
+            if (tmpOldPath.startsWith(oldPath + '/')) {
+              // 更新此文件夹下面的文件映射关系
+              let tmpNewPath = file.path + tmpOldPath.substring(oldPathLength)
+              logger(['rename map, ', oldPath, tmpOldPath, tmpNewPath])
+              delete this.settings.notesPathIdsMap[tmpOldPath]
+              this.settings.notesPathIdsMap[tmpNewPath] = tmpNoteId
+              this.settings.notesIdsPathMap[tmpNoteId].path = tmpNewPath
+            }
+          }
+          return
+        }
+        this.settings.notesPathIdsMap[file.path] = noteID
+        this.settings.notesIdsPathMap[noteID].path = file.path
+        delete this.settings.notesPathIdsMap[oldPath]
+        this.saveSettings()
+      })
+    )
     this.addCommand({
       id: 'sync',
       name: 'Sync your data now',
@@ -624,6 +659,7 @@ export default class WuCaiPlugin extends Plugin {
     //   })
     // })
     this.addSettingTab(new WuCaiSettingTab(this.app, this))
+    await this.exportInit()
     await this.configureSchedule()
     if (this.settings.token && this.settings.triggerOnLoad && !this.settings.isSyncing) {
       await this.saveSettings()

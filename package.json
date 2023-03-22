@@ -1,10 +1,10 @@
 {
   "name": "wucai-highlights-official",
-  "version": "23.3.10",
+  "version": "23.3.22",
   "description": "Automatically syncs your WuCai highlights with Obsidian.",
   "main": "main.js",
   "scripts": {
-    "dev": "rollup --config rollup.config.js --environment WUCAI_SERVER_URL:http://localhost:22021 -w ",
+    "dev": "rollup --config rollup.config.js --environment WUCAI_SERVER_URL:'http://localhost:22021' -w ",
     "build": "rollup --config rollup.config.js --environment WUCAI_SERVER_URL:https://marker.dotalk.cn",
     "dist": "npm run build && mkdir -p dist && cp styles.css main.js manifest.json dist"
   },
