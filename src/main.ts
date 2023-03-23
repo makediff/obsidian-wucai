@@ -19,8 +19,7 @@ import { StatusBar } from './status'
 import { BGCONSTS } from './bgconsts'
 
 // the process.env variable will be replaced by its target value in the output main.js file
-const baseURL = 'http://localhost:22021' || 'https://marker.dotalk.cn'
-// const baseURL = process.env.WUCAI_SERVER_URL || 'https://marker.dotalk.cn'
+const baseURL = process.env.WUCAI_SERVER_URL || 'https://marker.dotalk.cn'
 const WAITING_STATUSES = ['PENDING', 'RECEIVED', 'STARTED', 'RETRY']
 const SUCCESS_STATUSES = ['SYNCING']
 const API_URL_INIT = '/apix/openapi/wucai/sync/init'
@@ -195,10 +194,19 @@ export default class WuCaiPlugin extends Plugin {
   }
 
   // 初始化同步
-  async exportInit(buttonContext?: ButtonComponent, auto?: boolean) {
+  async exportInit(buttonContext?: ButtonComponent, auto?: boolean, flagx = '') {
     const dirInfo = this.app.vault.getAbstractFileByPath(this.settings.wuCaiDir)
     const noteDirDeleted = !dirInfo || !(dirInfo instanceof TFolder)
-    // let exportId: number
+    // logger([
+    //   'export init',
+    //   this.settings.wuCaiDir,
+    //   dirInfo,
+    //   {
+    //     noteDirDeleted,
+    //     isFolder: dirInfo instanceof TFolder,
+    //     isFile: dirInfo instanceof TFile,
+    //   },
+    // ])
     if (noteDirDeleted) {
       // 如果文件夹被删除，代表是重新同步
       this.settings.lastCursor = {
@@ -206,6 +214,12 @@ export default class WuCaiPlugin extends Plugin {
         lastId: 0,
         lastTime: 0,
       }
+      this.settings.notesIdsPathMap = {}
+      this.settings.notesPathIdsMap = {}
+      this.settings.notesToRefresh = []
+      logger(['onload last cursor, deleted,', this.settings.lastCursor])
+    } else {
+      logger(['onload last cursor, json, ', this.settings.lastCursor])
     }
     let lastCursor = this.settings.lastCursor
     let params = { noteDirDeleted, auto: auto && true, lastCursor }
@@ -227,7 +241,7 @@ export default class WuCaiPlugin extends Plugin {
     }
 
     let data: ExportInitRequestResponse = data2['data'] || {}
-    logger(['in exportInit', data, this.settings.lastCursor])
+    // logger(['in exportInit', data, this.settings.lastCursor])
 
     // 通过服务端计算来确定当前需要从哪个id开始同步笔记
     let tmpCursor = this.getNewLastCursor(data.lastCursor, this.settings.lastCursor)
@@ -251,10 +265,10 @@ export default class WuCaiPlugin extends Plugin {
       }
       // re-try in 3 second
       await new Promise((resolve) => setTimeout(resolve, 3000))
-      await this.exportInit(buttonContext)
+      await this.exportInit(buttonContext, false, 'exportInit timeout')
     } else if (SUCCESS_STATUSES.includes(data.taskStatus)) {
       this.notice('Syncing WuCai data')
-      return this.downloadArchive(this.settings.lastCursor, [], buttonContext, false)
+      return this.downloadArchive(this.settings.lastCursor, [], buttonContext, false, flagx || 'init')
     } else {
       this.handleSyncError(buttonContext, 'Sync failed,' + data.taskStatus)
     }
@@ -308,7 +322,6 @@ export default class WuCaiPlugin extends Plugin {
 
   getNewLastCursor(lc: WuCaiExportLastCursor, savedCusor: WuCaiExportLastCursor): WuCaiExportLastCursor {
     if (!lc) {
-      // no need change
       return
     }
     savedCusor = savedCusor || { lastId: 0, lastHighlightPKID: 0, lastTime: 0 }
@@ -327,12 +340,13 @@ export default class WuCaiPlugin extends Plugin {
     lastCursor: WuCaiExportLastCursor,
     noteIds: Array<number>,
     buttonContext: ButtonComponent,
-    isOverwrite: boolean
+    isOverwrite: boolean,
+    flagx = ''
   ): Promise<void> {
     let response
     try {
       // 同步范围: lastCursor, or noteIds
-      response = await this.callApi(API_URL_DOWNLOAD, { lastCursor, noteIds })
+      response = await this.callApi(API_URL_DOWNLOAD, { lastCursor, noteIds, flagx })
     } catch (e) {
       logger(['WuCai Official plugin: fetch failed in downloadArchive: ', e])
     }
@@ -354,7 +368,7 @@ export default class WuCaiPlugin extends Plugin {
     // const zipReader = new zip.ZipReader(blobReader)
     // const entries = await zipReader.getEntries()
 
-    // 23.3.22 不用提示了
+    // 不用提示了
     // this.notice('Saving files...', false, 30)
 
     // 是否为定向同步
@@ -481,13 +495,16 @@ export default class WuCaiPlugin extends Plugin {
       // we got manual option
       return
     }
-    this.scheduleInterval = window.setInterval(() => this.exportInit(null, true), milliseconds)
+    this.scheduleInterval = window.setInterval(() => this.exportInit(null, true, 'schedule init'), milliseconds)
     this.registerInterval(this.scheduleInterval)
   }
 
   async refreshNoteExport() {
+    if (!this.settings.refreshNotes) {
+      return
+    }
     let noteIds = this.settings.notesToRefresh || []
-    if (!noteIds.length || !this.settings.refreshNotes) {
+    if (noteIds.length <= 0) {
       return
     }
     let newNoteIds: Array<number> = []
@@ -497,7 +514,7 @@ export default class WuCaiPlugin extends Plugin {
         break
       }
     }
-    this.downloadArchive(null, newNoteIds, null, false)
+    this.downloadArchive(null, newNoteIds, null, true, 'refresh')
     this.settings.notesToRefresh = this.settings.notesToRefresh.filter((n) => !newNoteIds.includes(parseInt(n)))
   }
 
@@ -522,7 +539,7 @@ export default class WuCaiPlugin extends Plugin {
     } else {
       this.settings.isSyncing = true
       this.saveSettings()
-      this.exportInit()
+      this.exportInit(null, false, 'startSync init')
     }
   }
 
@@ -533,8 +550,6 @@ export default class WuCaiPlugin extends Plugin {
       this.registerInterval(window.setInterval(() => this.statusBar.display(), 1000))
     }
     await this.loadSettings()
-    this.settings.isSyncing = false
-    this.refreshNoteExport()
     this.registerEvent(
       this.app.vault.on('delete', async (file) => {
         // 将删除的文件放到待更新列表，这样下次就可以重新同步删除的问题
@@ -659,11 +674,23 @@ export default class WuCaiPlugin extends Plugin {
     //   })
     // })
     this.addSettingTab(new WuCaiSettingTab(this.app, this))
-    await this.exportInit()
     await this.configureSchedule()
+    this.settings.isSyncing = false
     if (this.settings.token && this.settings.triggerOnLoad && !this.settings.isSyncing) {
-      await this.saveSettings()
-      await this.exportInit(null, true)
+      // 因为加载关系，如果目录没有创建，可能是ob还没有启动完成
+      const dirInfo = this.app.vault.getAbstractFileByPath(this.settings.wuCaiDir)
+      const noteDirNotExists = !dirInfo || !(dirInfo instanceof TFolder)
+      if (noteDirNotExists) {
+        this.app.workspace.onLayoutReady(() => {
+          // https://forum.obsidian.md/t/plugins-with-a-lot-to-do-at-startup-being-async-onlayoutready/26205
+          logger(['onload last cursor 1', this.settings.lastCursor])
+          this.exportInit(null, true, 'onload + not exists')
+        })
+      } else {
+        await this.refreshNoteExport()
+        logger(['onload last cursor 2', this.settings.lastCursor])
+        await this.exportInit(null, true, 'onload + exists')
+      }
     }
   }
 
