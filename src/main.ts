@@ -430,8 +430,7 @@ export default class WuCaiPlugin extends Plugin {
     }
 
     let isCompleted = false
-
-    if (!isPartsDownloadLogic) {
+    if (isPartsDownloadLogic) {
       // 当前是指定笔记进行同步，所以每次就代表是一组同步完成
       isCompleted = true
     } else {
@@ -442,7 +441,6 @@ export default class WuCaiPlugin extends Plugin {
       let tmpCursor = this.getNewLastCursor(notesLastCursor, lastCursor)
       if (tmpCursor) {
         this.settings.lastCursor = tmpCursor
-
         // 当前是通过偏移量范围进行同步
         isCompleted = entriesCount <= 0
       } else {
