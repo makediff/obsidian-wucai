@@ -19,6 +19,7 @@ import { StatusBar } from './status'
 import { BGCONSTS } from './bgconsts'
 
 // the process.env variable will be replaced by its target value in the output main.js file
+// const baseURL = 'http://localhost:22021' || 'https://marker.dotalk.cn'
 const baseURL = process.env.WUCAI_SERVER_URL || 'https://marker.dotalk.cn'
 const WAITING_STATUSES = ['PENDING', 'RECEIVED', 'STARTED', 'RETRY']
 const SUCCESS_STATUSES = ['SYNCING']
@@ -328,6 +329,11 @@ export default class WuCaiPlugin extends Plugin {
     let lastId = savedCusor.lastId || 0
     let lastHighlightPKID = savedCusor.lastHighlightPKID || 0
     let lastTime = savedCusor.lastTime || 0
+
+    // 同步点位必须有一项是向前移动的
+    if (lc.lastId <= lastId && lc.lastHighlightPKID <= lastHighlightPKID && lc.lastTime <= lastTime) {
+      return
+    }
     return {
       lastId: lc.lastId > lastId ? lc.lastId : lastId,
       lastHighlightPKID: lc.lastHighlightPKID > lastHighlightPKID ? lc.lastHighlightPKID : lastHighlightPKID,
@@ -402,33 +408,17 @@ export default class WuCaiPlugin extends Plugin {
         if (!originalFile || !(originalFile instanceof TFile)) {
           await this.app.vault.create(originalName, contents)
         } else {
-          if (isOverwrite) {
-            await this.app.vault.modify(originalFile, contents)
-          } else {
-            // 如果本地文件已经存在，且不允许覆盖的时候，追加新的内容到文件末尾
-            const oldCnt = await this.app.vault.read(originalFile)
-            if (oldCnt !== contents) {
-              await this.app.vault.append(originalFile, '\n' + contents)
-            }
-          }
+          // if (isOverwrite) {
+          //   await this.app.vault.modify(originalFile, contents)
+          // } else {
+          //   // 如果本地文件已经存在，且不允许覆盖的时候，追加新的内容到文件末尾
+          //   const oldCnt = await this.app.vault.read(originalFile)
+          //   if (oldCnt !== contents) {
+          //     await this.app.vault.append(originalFile, '\n' + contents)
+          //   }
+          // }
+          await this.app.vault.modify(originalFile, contents)
         }
-
-        // 在同步的过程中不断的更新同步位置
-        // 不是定向同步时，记录同步位置
-        if (!isPartsDownloadLogic) {
-          let tmpCursor = this.getNewLastCursor(
-            {
-              lastId: entry.exportID || 0,
-              lastHighlightPKID: entry.highlightPKID || 0,
-              lastTime: entry.updateAt || 0,
-            },
-            this.settings.lastCursor
-          )
-          if (tmpCursor) {
-            this.settings.lastCursor = tmpCursor
-          }
-        }
-        await this.saveSettings()
       } catch (e) {
         logger([`WuCai Official plugin: error writing ${processedFileName}:`, e])
         this.notice(`WuCai: error while writing ${processedFileName}: ${e}`, true, 4, true)
@@ -439,17 +429,32 @@ export default class WuCaiPlugin extends Plugin {
       }
     }
 
-    // close the ZipReader
-    // await zipReader.close()
-
     let isCompleted = false
-    if (isPartsDownloadLogic) {
+
+    if (!isPartsDownloadLogic) {
       // 当前是指定笔记进行同步，所以每次就代表是一组同步完成
       isCompleted = true
     } else {
-      // 当前是通过偏移量范围进行同步
-      isCompleted = entriesCount <= 0
+      // 计算同步后的位置
+      // 在同步的过程中不断的更新同步位置
+      // 不是定向同步时，记录同步位置
+      let notesLastCursor: WuCaiExportLastCursor = data2['data'].lastCursor
+      let tmpCursor = this.getNewLastCursor(notesLastCursor, lastCursor)
+      if (tmpCursor) {
+        this.settings.lastCursor = tmpCursor
+
+        // 当前是通过偏移量范围进行同步
+        isCompleted = entriesCount <= 0
+      } else {
+        // 因为某种原因导致的定位不准，结束同步
+        isCompleted = true
+      }
     }
+    await this.saveSettings()
+
+    // close the ZipReader
+    // await zipReader.close()
+
     if (isCompleted) {
       await this.acknowledgeSyncCompleted(buttonContext)
       this.handleSyncSuccess(buttonContext, 'Synced!', this.settings.lastCursor)
