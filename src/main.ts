@@ -380,6 +380,7 @@ export default class WuCaiPlugin extends Plugin {
     // 是否为定向同步
     const isPartsDownloadLogic: boolean = noteIds.length > 0
     let entriesCount = entries.length
+    let writeStyle = data2['data'].writeStyle || 2 // 1:overwrite, 2:append
 
     // 保存同步过来的文件
     for (const entry of entries) {
@@ -408,16 +409,11 @@ export default class WuCaiPlugin extends Plugin {
         if (!originalFile || !(originalFile instanceof TFile)) {
           await this.app.vault.create(originalName, contents)
         } else {
-          // if (isOverwrite) {
-          //   await this.app.vault.modify(originalFile, contents)
-          // } else {
-          //   // 如果本地文件已经存在，且不允许覆盖的时候，追加新的内容到文件末尾
-          //   const oldCnt = await this.app.vault.read(originalFile)
-          //   if (oldCnt !== contents) {
-          //     await this.app.vault.append(originalFile, '\n' + contents)
-          //   }
-          // }
-          await this.app.vault.modify(originalFile, contents)
+          if (1 === writeStyle) {
+            await this.app.vault.modify(originalFile, contents)
+          } else {
+            await this.app.vault.append(originalFile, '\n' + contents)
+          }
         }
       } catch (e) {
         logger([`WuCai Official plugin: error writing ${processedFileName}:`, e])
