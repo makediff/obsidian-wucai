@@ -15,3 +15,5 @@ data.json
 dist
 obsidian-wucai
 *.zip
+
+test*.ts

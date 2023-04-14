@@ -364,11 +364,10 @@ export default class WuCaiPlugin extends Plugin {
       }
       const noteFile = await this.app.vault.getAbstractFileByPath(originalName)
       const noteExists = noteFile && noteFile instanceof TFile
-      const writeStyle: number = exportCfg.writeStyle
-      if (!noteExists || WRITE_STYLE_OVERWRITE === writeStyle) {
+      if (!noteExists || WRITE_STYLE_OVERWRITE === exportCfg.writeStyle) {
         let contents = WuCaiUtils.renderTemplate(holders, exportCfg)
         await this.app.vault.create(originalName, contents)
-      } else if (WRITE_STYLE_APPEND === writeStyle) {
+      } else if (WRITE_STYLE_APPEND === exportCfg.writeStyle) {
         // 这里有两种逻辑：1追加，2局部替换（主要通过模板里的占位符来区分）
         const oldCnt = await this.app.vault.read(noteFile)
         let contents = WuCaiUtils.renderTemplateWithEditable(holders, oldCnt, exportCfg)
@@ -430,6 +429,7 @@ export default class WuCaiPlugin extends Plugin {
     // 保存同步过来的文件
     for (const entry of entries) {
       await this.processEntity(entry)
+      break // @todo for test
     }
 
     let isCompleted = false
