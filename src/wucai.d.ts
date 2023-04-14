@@ -10,7 +10,7 @@ interface WuCaiExportLastCursor {
 
 interface WuCaiExportConfig {
   titleFormat: number
-  writeStyle: number
+  writeStyle: number // 写文件方式：1覆盖（默认），2追加
   titleStyle: number
   highlightStyle: number
   annotationStyle: number
@@ -28,13 +28,19 @@ interface ExportInitRequestResponse {
   taskStatus: string
 }
 
+// 从模板里分析出来的block模板代码
+interface WuCaiBlocks {
+  pagenote: string
+  highlights: string
+}
+
 interface WuCaiHolders {
   title: string
   url: string
   wucaiurl: string
   tags: string
   pagenote: string
-  highlights: string
+  highlights: Array<HighlightInfo>
   createat: string
   updateat: string
 }

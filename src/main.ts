@@ -20,8 +20,8 @@ import { BGCONSTS } from './bgconsts'
 import { WuCaiUtils } from './utils'
 
 // the process.env variable will be replaced by its target value in the output main.js file
-// const baseURL = 'http://localhost:22021' || 'https://marker.dotalk.cn'
-const baseURL = process.env.WUCAI_SERVER_URL || 'https://marker.dotalk.cn'
+const baseURL = 'http://localhost:22021' || 'https://marker.dotalk.cn'
+// const baseURL = process.env.WUCAI_SERVER_URL || 'https://marker.dotalk.cn'
 const WAITING_STATUSES = ['PENDING', 'RECEIVED', 'STARTED', 'RETRY']
 const SUCCESS_STATUSES = ['SYNCING']
 const API_URL_INIT = '/apix/openapi/wucai/sync/init'
@@ -57,6 +57,7 @@ const DEFAULT_SETTINGS: WuCaiPluginSettings = {
     annotationStyle: 1,
     tagStyle: 1,
     haveWuCaiTag: 2,
+    template: '',
   },
 }
 
@@ -217,7 +218,7 @@ export default class WuCaiPlugin extends Plugin {
     }
 
     let data: ExportInitRequestResponse = data2['data'] || {}
-    // logger(['in exportInit', data, this.settings.lastCursor])
+    logger(['in exportInit', data, this.settings.lastCursor])
 
     // 记录导出配置
     this.settings.exportConfig = data.exportConfig
@@ -248,7 +249,7 @@ export default class WuCaiPlugin extends Plugin {
       await this.exportInit(buttonContext, false, 'exportInit timeout')
     } else if (SUCCESS_STATUSES.includes(data.taskStatus)) {
       this.notice('Syncing WuCai data')
-      return this.downloadArchive(this.settings.lastCursor, [], buttonContext, false, flagx || 'init')
+      return this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx || 'init')
     } else {
       this.handleSyncError(buttonContext, 'Sync failed,' + data.taskStatus)
     }
@@ -320,6 +321,7 @@ export default class WuCaiPlugin extends Plugin {
     }
   }
 
+  // 遍历页面并生成文件
   async processEntity(entry: NoteEntry) {
     if (!entry) {
       return
@@ -330,20 +332,17 @@ export default class WuCaiPlugin extends Plugin {
       createAt: entry.createAt,
       noteIdX: entry.noteIdX,
     })
-    let noteId: string
-    const rawname = normalizePath(filename.replace(/^WuCai/, this.settings.wuCaiDir))
-    if (!rawname || rawname.length <= 0) {
+    let noteId: string = entry.noteIdX
+    const originalName = normalizePath(filename.replace(/^WuCai/, this.settings.wuCaiDir)).replace(/[\/ \s]+$/, '')
+    if (!originalName || originalName.length <= 0) {
       return
     }
-    const originalName = rawname.replace(/[\/ \s]+$/, '')
     try {
       // const contents = await entry.getData(new zip.TextWriter())
       // const contents = entry.contents
       // noteId = '' + entry.noteId
 
       // 计算出笔记的最终路径和名字
-      // let originalName = this.findLocalFileNameByNoteId(noteId) || processedFileName
-      // logger(['sync note', originalName, processedFileName])
       let dirPath = originalName.substring(0, originalName.lastIndexOf('/'))
       const fileInfo = await this.app.vault.getAbstractFileByPath(dirPath)
       if (!fileInfo || !(fileInfo instanceof TFolder)) {
@@ -359,27 +358,27 @@ export default class WuCaiPlugin extends Plugin {
         wucaiurl: entry.wuCaiUrl,
         tags: WuCaiUtils.formatTags(entry.category, exportCfg),
         pagenote: entry.pageNote,
-        highlights: WuCaiUtils.formatHighlights(entry.highlights, exportCfg),
+        highlights: entry.highlights,
         createat: '',
         updateat: '',
       }
-      const originalFile = await this.app.vault.getAbstractFileByPath(originalName)
-      const pageFileExists = originalFile && originalFile instanceof TFile
+      const noteFile = await this.app.vault.getAbstractFileByPath(originalName)
+      const noteExists = noteFile && noteFile instanceof TFile
       const writeStyle: number = exportCfg.writeStyle
-      if (!pageFileExists || WRITE_STYLE_OVERWRITE === writeStyle) {
-        let contents = WuCaiUtils.renderTemplateWithOverWritten(holders, exportCfg)
+      if (!noteExists || WRITE_STYLE_OVERWRITE === writeStyle) {
+        let contents = WuCaiUtils.renderTemplate(holders, exportCfg)
         await this.app.vault.create(originalName, contents)
       } else if (WRITE_STYLE_APPEND === writeStyle) {
         // 这里有两种逻辑：1追加，2局部替换（主要通过模板里的占位符来区分）
-        const oldCnt = await this.app.vault.read(originalFile)
+        const oldCnt = await this.app.vault.read(noteFile)
         let contents = WuCaiUtils.renderTemplateWithEditable(holders, oldCnt, exportCfg)
-        await this.app.vault.append(originalFile, '\n' + contents)
+        await this.app.vault.append(noteFile, '\n' + contents)
       } else {
         // error write style
       }
     } catch (e) {
-      logger([`WuCai Official plugin: error writing ${processedFileName}:`, e])
-      this.notice(`WuCai: error while writing ${processedFileName}: ${e}`, true, 4, true)
+      logger([`WuCai Official plugin: error writing ${originalName}:`, e])
+      this.notice(`WuCai: error while writing ${originalName}: ${e}`, true, 4, true)
       if (noteId) {
         this.settings.notesToRefresh.push(noteId)
         await this.saveSettings()
@@ -392,14 +391,13 @@ export default class WuCaiPlugin extends Plugin {
     lastCursor: WuCaiExportLastCursor,
     noteIds: Array<number>,
     buttonContext: ButtonComponent,
-    isOverwrite: boolean,
     flagx = ''
   ): Promise<void> {
     let response
     try {
       // 同步范围: lastCursor, or noteIds
       const writeStyle = this.settings.exportConfig.writeStyle
-      response = await this.callApi(API_URL_DOWNLOAD, { lastCursor, noteIds, flagx, writeStyle })
+      response = await this.callApi(API_URL_DOWNLOAD, { lastCursor, noteIds, flagx, writeStyle, out: 'json' })
     } catch (e) {
       logger(['WuCai Official plugin: fetch failed in downloadArchive: ', e])
     }
@@ -415,7 +413,7 @@ export default class WuCaiPlugin extends Plugin {
       return
     }
 
-    let entries = data2['data']['entries'] || []
+    let entries = data2['data']['notes'] || []
 
     // const blobReader = new zip.BlobReader(blob)
     // const zipReader = new zip.ZipReader(blobReader)
@@ -474,7 +472,7 @@ export default class WuCaiPlugin extends Plugin {
       this.handleSyncSuccess(buttonContext, 'syncing', this.settings.lastCursor)
       // this.notice('WuCai is syncing, ' + exportID, true, 1, true)
       await new Promise((resolve) => setTimeout(resolve, 5000))
-      this.downloadArchive(this.settings.lastCursor, [], buttonContext, isOverwrite)
+      this.downloadArchive(this.settings.lastCursor, [], buttonContext)
     }
   }
 
@@ -521,7 +519,7 @@ export default class WuCaiPlugin extends Plugin {
         break
       }
     }
-    this.downloadArchive(null, newNoteIds, null, true, 'refresh')
+    this.downloadArchive(null, newNoteIds, null, 'refresh')
     this.settings.notesToRefresh = this.settings.notesToRefresh.filter((n) => !newNoteIds.includes(parseInt(n)))
   }
 
@@ -530,13 +528,13 @@ export default class WuCaiPlugin extends Plugin {
     await this.saveSettings()
   }
 
-  reimportFile(vault: Vault, fileName: string, isOverwrite: boolean = false) {
+  reimportFile(vault: Vault, fileName: string) {
     const noteId = this.settings.notesPathIdsMap[fileName]
     if (!noteId) {
       this.notice('Failed to reimport. note id not found', true)
       return
     }
-    this.downloadArchive(null, [parseInt(noteId)], null, isOverwrite)
+    this.downloadArchive(null, [parseInt(noteId)], null)
   }
 
   startSync() {
@@ -649,12 +647,12 @@ export default class WuCaiPlugin extends Plugin {
             modal.close()
           })
           confirmBtn.onClickEvent(() => {
-            this.reimportFile(view.app.vault, activeFilePath, true)
+            this.reimportFile(view.app.vault, activeFilePath)
             modal.close()
           })
           modal.open()
         } else {
-          this.reimportFile(view.app.vault, activeFilePath, true)
+          this.reimportFile(view.app.vault, activeFilePath)
         }
       },
     })
