@@ -356,12 +356,13 @@ export default class WuCaiPlugin extends Plugin {
         title: entry.title,
         url: entry.url,
         wucaiurl: entry.wuCaiUrl,
-        tags: WuCaiUtils.formatTags(entry.category, exportCfg),
+        tags: WuCaiUtils.formatTags(entry.tags, exportCfg),
         pagenote: entry.pageNote,
         highlights: entry.highlights,
-        createat: '',
-        updateat: '',
+        createat: entry.createAt,
+        updateat: entry.updateAt,
       }
+      logger(['holders', holders])
       const noteFile = await this.app.vault.getAbstractFileByPath(originalName)
       const noteExists = noteFile && noteFile instanceof TFile
       if (!noteExists || WRITE_STYLE_OVERWRITE === exportCfg.writeStyle) {

@@ -133,8 +133,46 @@ export class WuCaiUtils {
   }
 
   // 根据配置生成 tag 列表
-  static formatTags(tags: string, exportCfg: WuCaiExportConfig): string {
-    return ''
+  static formatTags(tags: Array<string>, exportCfg: WuCaiExportConfig): string {
+    let ret = []
+    tags = tags || []
+    const isNeedHashTag = exportCfg.tagStyle === 1
+    tags.forEach((tag) => {
+      tag = tag.trim()
+      if (!tag || tag.length <= 0) {
+        return
+      }
+      let isHash = tag[0] === '#'
+      let isInner = tag[0] === '['
+      if (isHash && isNeedHashTag) {
+        ret.push(tag)
+      } else if (isInner && !isNeedHashTag) {
+        ret.push(tag)
+      } else {
+        // 转换
+        let coreTag = ''
+        if (isHash) {
+          coreTag = tag.substring(1)
+        } else if (isInner) {
+          coreTag = tag.substring(2, tag.length - 2).trim()
+        }
+        if (coreTag.length > 0) {
+          if (isNeedHashTag) {
+            ret.push('#' + coreTag)
+          } else {
+            ret.push(`[[${coreTag}]]`)
+          }
+        }
+      }
+    })
+    if (exportCfg.haveWuCaiTag === 1) {
+      if (isNeedHashTag) {
+        ret.push('#五彩插件')
+      } else {
+        ret.push('[[五彩插件]]')
+      }
+    }
+    return ret.join(" ")
   }
 
   static wrapBlock(cnt: string, name: string): string {

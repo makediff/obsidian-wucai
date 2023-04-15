@@ -41,8 +41,8 @@ interface WuCaiHolders {
   tags: string
   pagenote: string
   highlights: Array<HighlightInfo>
-  createat: string
-  updateat: string
+  createat: number
+  updateat: number
 }
 
 interface HighlightInfo {
@@ -62,6 +62,7 @@ interface NoteEntry {
   updateAt: number
   pageNote: string
   category: string
+  tags: Array<string>
   highlights: Array<HighlightInfo>
 }
 
