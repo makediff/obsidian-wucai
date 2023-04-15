@@ -13,32 +13,38 @@ export class WuCaiUtils {
 
   // 处理原始模板文件，添加占位符
   static blocksRegExpMap = new Map<string, RegExp>([
-    ['highlights', new RegExp('(\\{%\\s*block\\s+highlights\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\})', 'img')],
-    ['pagenote', new RegExp('(\\{%\\s*block\\s+pagenote\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\})', 'img')],
+    ['highlights', new RegExp('\\{%\\s*block\\s+highlights\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}', 'img')],
+    ['pagenote', new RegExp('\\{%\\s*block\\s+pagenote\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}', 'img')],
   ])
 
   // 从目标文件提取占位符
   static holdersRegExpMap = new Map<string, RegExp>([
-    ['highlights', new RegExp('(%%\\s*begin\\s*highlights\\s*%%([\\s\\S]*?)%%\\s*end\\s+highlights\\s*%%)', 'ig')],
-    ['pagenote', new RegExp('(%%\\s*begin\\s*pagenote\\s*%%([\\s\\S]*?)%%\\s*end\\s+pagenote\\s*%%)', 'ig')],
+    ['highlights', new RegExp('%%\\s*begin\\s*highlights\\s*%%([\\s\\S]*?)%%\\s*end\\s+highlights\\s*%%', 'ig')],
+    ['pagenote', new RegExp('%%\\s*begin\\s*pagenote\\s*%%([\\s\\S]*?)%%\\s*end\\s+pagenote\\s*%%', 'ig')],
   ])
 
   // 从 t1 模板里，找出需要的 block 和其对应的模板代码
   static getBlocks(t1: string): WuCaiBlocks {
     t1 = t1 || ''
-    let match1 = t1.matchAll(/(\{%\s*block\s+([a-z0-9-_]+)\s*%\}[\s\S]*?\{%\s*endblock\s*%\})/gi)
+    // let match1 = t1.matchAll(/(\{%\s*block\s+([a-z0-9-_]+)\s*%\}[\s\S]*?\{%\s*endblock\s*%\})/gi)
+    let blockRegExp = new RegExp('\\{%\\s*block\\s+([a-z0-9-_]+)\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}', 'ig')
+    let match1 = t1.matchAll(blockRegExp)
     let ret: WuCaiBlocks = {
       highlights: '',
       pagenote: '',
     }
     for (const match of match1) {
-      let block = (match[2] || '').toLowerCase()
+      let block = (match[1] || '').toLowerCase()
       switch (block) {
         case 'pagenote':
-          ret.pagenote = match[1] || ''
+          if (ret.pagenote.length <= 0) {
+            ret.pagenote = match[0] || ''
+          }
           break
         case 'highlights':
-          ret.highlights = match[1] || ''
+          if (ret.highlights.length <= 0) {
+            ret.highlights = match[0] || ''
+          }
           break
         default:
           break
@@ -61,21 +67,28 @@ export class WuCaiUtils {
       if (!newCnt || newCnt.length <= 0) {
         return
       }
-      let match1 = t1.match(exp)
-      if (!match1) {
+      let matchRet = t1.matchAll(exp)
+      if (!matchRet || matchRet.length <= 0) {
         // append to the end of file
-        t1 += this.wrapBlock(newCnt, bn)
+        t1 += wrapBlock(newCnt, bn)
         return
       }
-      let oldCnt = match1[2] || ''
-      if (writeStyle === 1) {
-        // overwrite
-        newCnt = '\n' + newCnt + '\n'
-      } else {
-        // append
-        newCnt = oldCnt + '\n' + newCnt + '\n'
+      let matchC = 0
+      for (const match1 of matchRet) {
+        let oldCnt = match1[1] || ''
+        if (writeStyle === 1) {
+          // overwrite
+          newCnt = '\n' + newCnt + '\n'
+        } else {
+          // append
+          newCnt = oldCnt + '\n' + newCnt + '\n'
+        }
+        t1 = t1.replace(oldCnt, newCnt)
+        matchC++
       }
-      t1 = t1.replace(oldCnt, newCnt)
+      if (matchC <= 0) {
+        t1 += wrapBlock(newCnt, bn)
+      }
     })
     return t1
   }
@@ -93,12 +106,13 @@ export class WuCaiUtils {
       if (!newCnt || newCnt.length <= 0) {
         return
       }
-      let match1 = t1.match(exp)
+      // 因为是整个替换，且只用替换第一个，所以用 exec
+      let match1 = exp.exec(t1)
       if (!match1) {
         return
       }
       let oldCnt = match1[0] || ''
-      console.log(['replace', oldCnt, newCnt, match1])
+      // console.log(['replace', oldCnt, newCnt, match1])
       t1 = t1.replace(oldCnt, newCnt)
     })
     return t1
