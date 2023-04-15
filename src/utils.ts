@@ -70,7 +70,7 @@ export class WuCaiUtils {
       let matchRet = t1.matchAll(exp)
       if (!matchRet || matchRet.length <= 0) {
         // append to the end of file
-        t1 += wrapBlock(newCnt, bn)
+        t1 += this.wrapBlock(newCnt, bn)
         return
       }
       let matchC = 0
@@ -87,7 +87,7 @@ export class WuCaiUtils {
         matchC++
       }
       if (matchC <= 0) {
-        t1 += wrapBlock(newCnt, bn)
+        t1 += this.wrapBlock(newCnt, bn)
       }
     })
     return t1
@@ -129,7 +129,19 @@ export class WuCaiUtils {
 
   // 生成目标文件名
   static generateFileName(nameStyle: number, { title = '', createAt = 0, noteIdX = '' }): string {
-    return `WuCai/${noteIdX}.md`
+    let fn = ''
+    let ts = new Date(createAt * 1000)
+    // if (1 === nameStyle) {
+    //   // 使用标题
+    // } else
+    if (2 === nameStyle) {
+      // 使用时间戳，有目录结构
+      fn = this.formatDateTime(ts, 'YYYY/MM') + '/' + this.formatDateTime(ts, 'YYYY-MM-DD')
+    } else {
+      // 使用时间戳，没有目录结构
+      fn = this.formatDateTime(ts, 'YYYY-MM-DD')
+    }
+    return `WuCai/WuCai-${fn}-${noteIdX}.md`
   }
 
   // 根据配置生成 tag 列表
@@ -172,7 +184,7 @@ export class WuCaiUtils {
         ret.push('[[五彩插件]]')
       }
     }
-    return ret.join(" ")
+    return ret.join(' ')
   }
 
   static wrapBlock(cnt: string, name: string): string {
@@ -180,36 +192,23 @@ export class WuCaiUtils {
   }
 
   // 生成的内容直接替换原有文件
-  static renderTemplate(hodlers: WuCaiHolders, exportCfg: WuCaiExportConfig): string {
-    let tpl = exportCfg.template || WuCaiTemplates.Style001
-
-    // 对模板里的 block 添加占位符
-    const blocks = this.getBlocks(tpl) // 优化，只需要1次
-    let renderHolders: { [key: string]: string } = {}
-    if (blocks.pagenote) {
-      renderHolders['pagenote'] = this.wrapBlock(blocks.pagenote, 'pagenote')
-    }
-    if (blocks.highlights) {
-      renderHolders['highlights'] = this.wrapBlock(blocks.highlights, 'highlights')
-    }
-    tpl = this.replaceBlocks(tpl, renderHolders)
-    console.log(['new tpl is', tpl, renderHolders])
-    return nunjucks.renderString(tpl, hodlers)
+  static renderTemplate(holders: WuCaiHolders, templates: WuCaiTemplates, exportCfg: WuCaiExportConfig): string {
+    return templates.pageEngine.render(holders)
   }
 
   // 追加到文件末尾或替换文件里的局部内容
-  static renderTemplateWithEditable(hodlers: WuCaiHolders, oldCnt: string, exportCfg: WuCaiExportConfig): string {
-    const tpl = exportCfg.template || WuCaiTemplates.Style001
-    // 1. 分析出模板里的 blocks
-    const blocks = this.getBlocks(tpl) // 优化，只需要1次
-    console.log(['render blocks', blocks])
-    // 2. 用数据渲染此 block 的结果
+  static renderTemplateWithEditable(
+    holders: WuCaiHolders,
+    oldCnt: string,
+    templates: WuCaiTemplates,
+    exportCfg: WuCaiExportConfig
+  ): string {
     let renderHolders: { [key: string]: string } = {}
-    if (blocks.pagenote) {
-      renderHolders['pagenote'] = nunjucks.renderString(blocks.pagenote, hodlers)
+    if (templates.blocks.pagenote) {
+      renderHolders['pagenote'] = templates.pagenoteEngine.render(holders)
     }
-    if (blocks.highlights) {
-      renderHolders['highlights'] = nunjucks.renderString(blocks.highlights, hodlers)
+    if (templates.blocks.highlights) {
+      renderHolders['highlights'] = templates.highlightsEngine.render(holders)
     }
     console.log(['render holders', renderHolders])
     // 3. 将 block 结果替换到文件里

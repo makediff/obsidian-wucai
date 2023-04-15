@@ -85,6 +85,6 @@ interface WuCaiPluginSettings {
 
   refreshNotes: boolean
   notesToRefresh: Array<string>
-  notesPathIdsMap: { [key: string]: string } // key is path(also filename), value is noteId, ==> path vs. noteId
-  notesIdsPathMap: { [key: string]: NoteIdInfo } // key is nodeId, value is path
+  // notesPathIdsMap: { [key: string]: string } // key is path(also filename), value is noteId, ==> path vs. noteId
+  // notesIdsPathMap: { [key: string]: NoteIdInfo } // key is nodeId, value is path
 }

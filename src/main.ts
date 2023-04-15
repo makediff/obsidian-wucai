@@ -18,6 +18,7 @@ import * as zip from '@zip.js/zip.js'
 import { StatusBar } from './status'
 import { BGCONSTS } from './bgconsts'
 import { WuCaiUtils } from './utils'
+import { WuCaiTemplates } from './templates'
 
 // the process.env variable will be replaced by its target value in the output main.js file
 const baseURL = 'http://localhost:22021' || 'https://marker.dotalk.cn'
@@ -41,8 +42,8 @@ const DEFAULT_SETTINGS: WuCaiPluginSettings = {
   lastSyncFailed: false,
   refreshNotes: false,
   notesToRefresh: [],
-  notesPathIdsMap: {},
-  notesIdsPathMap: {},
+  // notesPathIdsMap: {},
+  // notesIdsPathMap: {},
   reimportShowConfirmation: true,
   lastCursor: {
     lastId: 0,
@@ -90,6 +91,7 @@ export default class WuCaiPlugin extends Plugin {
   settings: WuCaiPluginSettings
   scheduleInterval: null | number = null
   statusBar: StatusBar
+  pageTemplate: WuCaiTemplates
 
   checkResponseBody(buttonContext: ButtonComponent, rsp: any): boolean {
     if (!rsp) {
@@ -170,6 +172,11 @@ export default class WuCaiPlugin extends Plugin {
     })
   }
 
+  parsePageTemplate(exportConfig: WuCaiExportConfig) {
+    this.pageTemplate = new WuCaiTemplates(exportConfig.template)
+    this.pageTemplate.precompile()
+  }
+
   // 初始化同步
   async exportInit(buttonContext?: ButtonComponent, auto?: boolean, flagx = '') {
     const dirInfo = this.app.vault.getAbstractFileByPath(this.settings.wuCaiDir)
@@ -191,8 +198,8 @@ export default class WuCaiPlugin extends Plugin {
         lastId: 0,
         lastTime: 0,
       }
-      this.settings.notesIdsPathMap = {}
-      this.settings.notesPathIdsMap = {}
+      // this.settings.notesIdsPathMap = {}
+      // this.settings.notesPathIdsMap = {}
       this.settings.notesToRefresh = []
       logger(['onload last cursor, deleted,', this.settings.lastCursor])
     } else {
@@ -222,6 +229,7 @@ export default class WuCaiPlugin extends Plugin {
 
     // 记录导出配置
     this.settings.exportConfig = data.exportConfig
+    this.parsePageTemplate(this.settings.exportConfig)
 
     // 通过服务端计算来确定当前需要从哪个id开始同步笔记
     let tmpCursor = this.getNewLastCursor(data.lastCursor, this.settings.lastCursor)
@@ -287,19 +295,19 @@ export default class WuCaiPlugin extends Plugin {
     }
   }
 
-  // 是否有对应的本地名称（出现这样的情况是本地做了重命名或移动文件夹)
-  findLocalFileNameByNoteId(noteID: string): string {
-    let note: NoteIdInfo = this.settings.notesIdsPathMap[noteID]
-    if (!note || note == undefined) {
-      return ''
-    }
-    let newfn = note.path
-    if (newfn.startsWith(this.settings.wuCaiDir + '/')) {
-      // 只有在指定的文件夹内移动才会保持关联
-      return newfn
-    }
-    return ''
-  }
+  // // 是否有对应的本地名称（出现这样的情况是本地做了重命名或移动文件夹)
+  // findLocalFileNameByNoteId(noteID: string): string {
+  //   let note: NoteIdInfo = this.settings.notesIdsPathMap[noteID]
+  //   if (!note || note == undefined) {
+  //     return ''
+  //   }
+  //   let newfn = note.path
+  //   if (newfn.startsWith(this.settings.wuCaiDir + '/')) {
+  //     // 只有在指定的文件夹内移动才会保持关联
+  //     return newfn
+  //   }
+  //   return ''
+  // }
 
   getNewLastCursor(lc: WuCaiExportLastCursor, savedCusor: WuCaiExportLastCursor): WuCaiExportLastCursor {
     if (!lc) {
@@ -332,26 +340,19 @@ export default class WuCaiPlugin extends Plugin {
       createAt: entry.createAt,
       noteIdX: entry.noteIdX,
     })
-    let noteId: string = entry.noteIdX
+    // let noteId: string = entry.noteIdX
     const originalName = normalizePath(filename.replace(/^WuCai/, this.settings.wuCaiDir)).replace(/[\/ \s]+$/, '')
     if (!originalName || originalName.length <= 0) {
       return
     }
     try {
       // const contents = await entry.getData(new zip.TextWriter())
-      // const contents = entry.contents
-      // noteId = '' + entry.noteId
-
       // 计算出笔记的最终路径和名字
       let dirPath = originalName.substring(0, originalName.lastIndexOf('/'))
       const fileInfo = await this.app.vault.getAbstractFileByPath(dirPath)
       if (!fileInfo || !(fileInfo instanceof TFolder)) {
         await this.app.vault.createFolder(dirPath)
       }
-
-      // this.settings.notesPathIdsMap[originalName] = noteId
-      // this.settings.notesIdsPathMap[noteId] = { path: originalName, updateAt: entry.updateAt }
-
       const holders: WuCaiHolders = {
         title: entry.title,
         url: entry.url,
@@ -362,25 +363,24 @@ export default class WuCaiPlugin extends Plugin {
         createat: entry.createAt,
         updateat: entry.updateAt,
       }
-      logger(['holders', holders])
       const noteFile = await this.app.vault.getAbstractFileByPath(originalName)
       const noteExists = noteFile && noteFile instanceof TFile
       if (!noteExists || WRITE_STYLE_OVERWRITE === exportCfg.writeStyle) {
-        let contents = WuCaiUtils.renderTemplate(holders, exportCfg)
+        let contents = WuCaiUtils.renderTemplate(holders, this.pageTemplate, exportCfg)
         await this.app.vault.create(originalName, contents)
       } else if (WRITE_STYLE_APPEND === exportCfg.writeStyle) {
         // 这里有两种逻辑：1追加，2局部替换（主要通过模板里的占位符来区分）
         const oldCnt = await this.app.vault.read(noteFile)
-        let contents = WuCaiUtils.renderTemplateWithEditable(holders, oldCnt, exportCfg)
+        let contents = WuCaiUtils.renderTemplateWithEditable(holders, oldCnt, this.pageTemplate, exportCfg)
         await this.app.vault.append(noteFile, '\n' + contents)
       } else {
-        // error write style
+        // write style error, do nothing
       }
     } catch (e) {
       logger([`WuCai Official plugin: error writing ${originalName}:`, e])
       this.notice(`WuCai: error while writing ${originalName}: ${e}`, true, 4, true)
-      if (noteId) {
-        this.settings.notesToRefresh.push(noteId)
+      if (entry.noteIdX) {
+        this.settings.notesToRefresh.push(entry.noteIdX)
         await this.saveSettings()
       }
     }
@@ -477,6 +477,7 @@ export default class WuCaiPlugin extends Plugin {
     }
   }
 
+  // 同步完成后，确认同步点位
   async acknowledgeSyncCompleted(buttonContext: ButtonComponent) {
     let rsp
     try {
@@ -530,12 +531,12 @@ export default class WuCaiPlugin extends Plugin {
   }
 
   reimportFile(vault: Vault, fileName: string) {
-    const noteId = this.settings.notesPathIdsMap[fileName]
-    if (!noteId) {
-      this.notice('Failed to reimport. note id not found', true)
-      return
-    }
-    this.downloadArchive(null, [parseInt(noteId)], null)
+    // const noteId = this.settings.notesPathIdsMap[fileName]
+    // if (!noteId) {
+    //   this.notice('Failed to reimport. note id not found', true)
+    //   return
+    // }
+    // this.downloadArchive(null, [parseInt(noteId)], null)
   }
 
   startSync() {
@@ -556,55 +557,55 @@ export default class WuCaiPlugin extends Plugin {
       this.registerInterval(window.setInterval(() => this.statusBar.display(), 1000))
     }
     await this.loadSettings()
-    this.registerEvent(
-      this.app.vault.on('delete', async (file) => {
-        // 将删除的文件放到待更新列表，这样下次就可以重新同步删除的问题
-        const noteID = this.settings.notesPathIdsMap[file.path]
-        if (noteID) {
-          await this.addNoteToRefresh(noteID)
-        }
-        delete this.settings.notesPathIdsMap[file.path]
-        delete this.settings.notesIdsPathMap[noteID]
-        this.saveSettings()
-        if (noteID) {
-          this.refreshNoteExport()
-        }
-      })
-    )
-    this.registerEvent(
-      this.app.vault.on('rename', (file, oldPath) => {
-        // 如果是五彩划线目录里的文件，在重命名的时候，进行关联，以保证下次同步能找到相应的文件
-        if (!oldPath.startsWith(this.settings.wuCaiDir + '/')) {
-          return
-        }
-        logger(['rename path', file, oldPath])
-        const noteID = this.settings.notesPathIdsMap[oldPath]
-        if (!noteID) {
-          // 检测是否是修改的目录，如果是目录，则需要更新目录下的所有映射关系
-          let oldPathLength = oldPath.length
-          for (let tmpNoteId in this.settings.notesIdsPathMap) {
-            let note: NoteIdInfo = this.settings.notesIdsPathMap[tmpNoteId]
-            if (!note || note == undefined) {
-              continue
-            }
-            let tmpOldPath = note.path
-            if (tmpOldPath.startsWith(oldPath + '/')) {
-              // 更新此文件夹下面的文件映射关系
-              let tmpNewPath = file.path + tmpOldPath.substring(oldPathLength)
-              logger(['rename map, ', oldPath, tmpOldPath, tmpNewPath])
-              delete this.settings.notesPathIdsMap[tmpOldPath]
-              this.settings.notesPathIdsMap[tmpNewPath] = tmpNoteId
-              this.settings.notesIdsPathMap[tmpNoteId].path = tmpNewPath
-            }
-          }
-          return
-        }
-        this.settings.notesPathIdsMap[file.path] = noteID
-        this.settings.notesIdsPathMap[noteID].path = file.path
-        delete this.settings.notesPathIdsMap[oldPath]
-        this.saveSettings()
-      })
-    )
+    // this.registerEvent(
+    //   this.app.vault.on('delete', async (file) => {
+    //     // 将删除的文件放到待更新列表，这样下次就可以重新同步删除的问题
+    //     const noteID = this.settings.notesPathIdsMap[file.path]
+    //     if (noteID) {
+    //       await this.addNoteToRefresh(noteID)
+    //     }
+    //     delete this.settings.notesPathIdsMap[file.path]
+    //     delete this.settings.notesIdsPathMap[noteID]
+    //     this.saveSettings()
+    //     if (noteID) {
+    //       this.refreshNoteExport()
+    //     }
+    //   })
+    // )
+    // this.registerEvent(
+    //   this.app.vault.on('rename', (file, oldPath) => {
+    //     // 如果是五彩划线目录里的文件，在重命名的时候，进行关联，以保证下次同步能找到相应的文件
+    //     if (!oldPath.startsWith(this.settings.wuCaiDir + '/')) {
+    //       return
+    //     }
+    //     logger(['rename path', file, oldPath])
+    //     const noteID = this.settings.notesPathIdsMap[oldPath]
+    //     if (!noteID) {
+    //       // 检测是否是修改的目录，如果是目录，则需要更新目录下的所有映射关系
+    //       let oldPathLength = oldPath.length
+    //       for (let tmpNoteId in this.settings.notesIdsPathMap) {
+    //         let note: NoteIdInfo = this.settings.notesIdsPathMap[tmpNoteId]
+    //         if (!note || note == undefined) {
+    //           continue
+    //         }
+    //         let tmpOldPath = note.path
+    //         if (tmpOldPath.startsWith(oldPath + '/')) {
+    //           // 更新此文件夹下面的文件映射关系
+    //           let tmpNewPath = file.path + tmpOldPath.substring(oldPathLength)
+    //           logger(['rename map, ', oldPath, tmpOldPath, tmpNewPath])
+    //           delete this.settings.notesPathIdsMap[tmpOldPath]
+    //           this.settings.notesPathIdsMap[tmpNewPath] = tmpNoteId
+    //           this.settings.notesIdsPathMap[tmpNoteId].path = tmpNewPath
+    //         }
+    //       }
+    //       return
+    //     }
+    //     this.settings.notesPathIdsMap[file.path] = noteID
+    //     this.settings.notesIdsPathMap[noteID].path = file.path
+    //     delete this.settings.notesPathIdsMap[oldPath]
+    //     this.saveSettings()
+    //   })
+    // )
     this.addCommand({
       id: 'sync',
       name: 'Sync your data now',
@@ -613,50 +614,45 @@ export default class WuCaiPlugin extends Plugin {
       },
     })
     // this.addCommand({
-    //   id: 'wucai-official-format',
-    //   name: 'Customize formatting',
-    //   callback: () => window.open(`${baseURL}/export/obsidian/preferences`),
+    //   id: 'reimport',
+    //   name: 'Delete and reimport this document',
+    //   editorCheckCallback: (checking: boolean, editor: Editor, view: MarkdownView) => {
+    //     const activeFilePath = view.file.path
+    //     // const isRWfile = activeFilePath in this.settings.notesPathIdsMap
+    //     // if (checking) {
+    //     //   return isRWfile
+    //     // }
+    //     if (this.settings.reimportShowConfirmation) {
+    //       const modal = new Modal(view.app)
+    //       modal.contentEl.createEl('p', {
+    //         text:
+    //           'Warning: Proceeding will delete this file entirely (including any changes you made) ' +
+    //           'and then reimport a new copy of your highlights from WuCai.',
+    //       })
+    //       const buttonsContainer = modal.contentEl.createEl('div', { cls: 'wc-modal-btns' })
+    //       const cancelBtn = buttonsContainer.createEl('button', { text: 'Cancel' })
+    //       const confirmBtn = buttonsContainer.createEl('button', { text: 'Proceed', cls: 'mod-warning' })
+    //       const showConfContainer = modal.contentEl.createEl('div', { cls: 'wc-modal-confirmation' })
+    //       showConfContainer.createEl('label', { attr: { for: 'wc-ask-nl' }, text: "on't ask me in the future" })
+    //       const showConf = showConfContainer.createEl('input', { type: 'checkbox', attr: { name: 'wc-ask-nl' } })
+    //       showConf.addEventListener('change', (ev) => {
+    //         // @ts-ignore
+    //         this.settings.reimportShowConfirmation = !ev.target.checked
+    //         this.saveSettings()
+    //       })
+    //       cancelBtn.onClickEvent(() => {
+    //         modal.close()
+    //       })
+    //       confirmBtn.onClickEvent(() => {
+    //         this.reimportFile(view.app.vault, activeFilePath)
+    //         modal.close()
+    //       })
+    //       modal.open()
+    //     } else {
+    //       this.reimportFile(view.app.vault, activeFilePath)
+    //     }
+    //   },
     // })
-    this.addCommand({
-      id: 'reimport',
-      name: 'Delete and reimport this document',
-      editorCheckCallback: (checking: boolean, editor: Editor, view: MarkdownView) => {
-        const activeFilePath = view.file.path
-        const isRWfile = activeFilePath in this.settings.notesPathIdsMap
-        if (checking) {
-          return isRWfile
-        }
-        if (this.settings.reimportShowConfirmation) {
-          const modal = new Modal(view.app)
-          modal.contentEl.createEl('p', {
-            text:
-              'Warning: Proceeding will delete this file entirely (including any changes you made) ' +
-              'and then reimport a new copy of your highlights from WuCai.',
-          })
-          const buttonsContainer = modal.contentEl.createEl('div', { cls: 'wc-modal-btns' })
-          const cancelBtn = buttonsContainer.createEl('button', { text: 'Cancel' })
-          const confirmBtn = buttonsContainer.createEl('button', { text: 'Proceed', cls: 'mod-warning' })
-          const showConfContainer = modal.contentEl.createEl('div', { cls: 'wc-modal-confirmation' })
-          showConfContainer.createEl('label', { attr: { for: 'wc-ask-nl' }, text: "on't ask me in the future" })
-          const showConf = showConfContainer.createEl('input', { type: 'checkbox', attr: { name: 'wc-ask-nl' } })
-          showConf.addEventListener('change', (ev) => {
-            // @ts-ignore
-            this.settings.reimportShowConfirmation = !ev.target.checked
-            this.saveSettings()
-          })
-          cancelBtn.onClickEvent(() => {
-            modal.close()
-          })
-          confirmBtn.onClickEvent(() => {
-            this.reimportFile(view.app.vault, activeFilePath)
-            modal.close()
-          })
-          modal.open()
-        } else {
-          this.reimportFile(view.app.vault, activeFilePath)
-        }
-      },
-    })
     // this.registerMarkdownPostProcessor((el, ctx) => {
     //   if (!ctx.sourcePath.startsWith(this.settings.wuCaiDir)) {
     //     return
@@ -693,6 +689,7 @@ export default class WuCaiPlugin extends Plugin {
           this.exportInit(null, true, 'onload + not exists')
         })
       } else {
+        await this.exportInit()
         await this.refreshNoteExport()
         logger(['onload last cursor 2', this.settings.lastCursor])
         await this.exportInit(null, true, 'onload + exists')
