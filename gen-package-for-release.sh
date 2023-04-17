@@ -1,3 +1,4 @@
+rm -rf obsidian-wucai.zip
 rm -rf dist.zip
 rm -rf dist/ && \
     npm i && \

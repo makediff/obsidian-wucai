@@ -16,16 +16,21 @@ interface WuCaiExportConfig {
   annotationStyle: number
   tagStyle: number
   haveWuCaiTag: number
-  template: string
+  obTemplate: string
 }
 
 // 初始化接口返回的字段
 interface ExportInitRequestResponse {
-  lastCursor: WuCaiExportLastCursor
+  lastCursor2: string
   exportConfig: WuCaiExportConfig
   totalNotes: number
   notesExported: number
   taskStatus: string
+}
+
+interface ExportDownloadResponse {
+  notes: Array<NoteEntry>
+  lastCursor2: string
 }
 
 // 从模板里分析出来的block模板代码
@@ -37,12 +42,11 @@ interface WuCaiBlocks {
 interface WuCaiHolders {
   title: string
   url: string
-  wucaiurl: string
   tags: string
   pagenote: string
   highlights: Array<HighlightInfo>
-  createat: number
-  updateat: number
+  createat: string
+  updateat: string
 }
 
 interface HighlightInfo {
@@ -57,6 +61,7 @@ interface NoteEntry {
   title: string
   url: string
   noteIdX: string
+  noteId: number
   wuCaiUrl: string
   createAt: number
   updateAt: number
@@ -80,11 +85,9 @@ interface WuCaiPluginSettings {
   lastSyncFailed: boolean
   reimportShowConfirmation: boolean
 
-  lastCursor: WuCaiExportLastCursor
+  lastCursor: string
   exportConfig: WuCaiExportConfig
 
   refreshNotes: boolean
-  notesToRefresh: Array<string>
-  // notesPathIdsMap: { [key: string]: string } // key is path(also filename), value is noteId, ==> path vs. noteId
-  // notesIdsPathMap: { [key: string]: NoteIdInfo } // key is nodeId, value is path
+  notesToRefresh: Array<string> // 更新出现异常的网页
 }

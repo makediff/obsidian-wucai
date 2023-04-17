@@ -1,39 +1,40 @@
 import { WuCaiTemplates } from './templates'
 import moment from 'moment'
-import nunjucks from 'nunjucks'
 
 export class WuCaiUtils {
   static allowedBlock = ['highlights', 'pagenote']
 
   // 用于从模板里提取指定 block 模板内容
   static fetchBlocksRegExp = new RegExp(
-    '(\\{%\\s*block\\s+([a-z0-9-_]+)\\s*%}[\\s\\S]*?\\{%\\s*endblock\\s*%\\})',
+    '\\{%\\s*block\\s+([a-z0-9-_]+)\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}',
     'ig'
   )
 
   // 处理原始模板文件，添加占位符
-  static blocksRegExpMap = new Map<string, RegExp>([
-    ['highlights', new RegExp('\\{%\\s*block\\s+highlights\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}', 'img')],
-    ['pagenote', new RegExp('\\{%\\s*block\\s+pagenote\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}', 'img')],
-  ])
+  static blocksRegExpMap: { [key: string]: RegExp } = {
+    highlights: new RegExp('\\{%\\s*block\\s+highlights\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}', 'img'),
+    pagenote: new RegExp('\\{%\\s*block\\s+pagenote\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}', 'img'),
+  }
 
   // 从目标文件提取占位符
-  static holdersRegExpMap = new Map<string, RegExp>([
-    ['highlights', new RegExp('%%\\s*begin\\s*highlights\\s*%%([\\s\\S]*?)%%\\s*end\\s+highlights\\s*%%', 'ig')],
-    ['pagenote', new RegExp('%%\\s*begin\\s*pagenote\\s*%%([\\s\\S]*?)%%\\s*end\\s+pagenote\\s*%%', 'ig')],
-  ])
+  static holdersRegExpMap: { [key: string]: RegExp } = {
+    highlights: new RegExp('%%\\s*begin\\s*highlights\\s*%%([\\s\\S]*?)%%\\s*end\\s+highlights\\s*%%', 'ig'),
+    pagenote: new RegExp('%%\\s*begin\\s*pagenote\\s*%%([\\s\\S]*?)%%\\s*end\\s+pagenote\\s*%%', 'ig'),
+  }
 
   // 从 t1 模板里，找出需要的 block 和其对应的模板代码
-  static getBlocks(t1: string): WuCaiBlocks {
-    t1 = t1 || ''
-    // let match1 = t1.matchAll(/(\{%\s*block\s+([a-z0-9-_]+)\s*%\}[\s\S]*?\{%\s*endblock\s*%\})/gi)
-    let blockRegExp = new RegExp('\\{%\\s*block\\s+([a-z0-9-_]+)\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}', 'ig')
-    let match1 = t1.matchAll(blockRegExp)
+  static getBlocks(t2: string): WuCaiBlocks {
+    let t1 = t2 || ''
+    let matchRet = t1.matchAll(this.fetchBlocksRegExp)
     let ret: WuCaiBlocks = {
       highlights: '',
       pagenote: '',
     }
-    for (const match of match1) {
+    if (!matchRet) {
+      // console.log({ msg: 'get blocks', t1, exp: this.fetchBlocksRegExp })
+      return ret
+    }
+    for (const match of matchRet) {
       let block = (match[1] || '').toLowerCase()
       switch (block) {
         case 'pagenote':
@@ -59,7 +60,7 @@ export class WuCaiUtils {
     t1 = t1 || ''
     const bns = Object.keys(renderHolders || {})
     bns.forEach((bn) => {
-      let exp = this.holdersRegExpMap.get(bn)
+      let exp = this.holdersRegExpMap[bn]
       if (!exp) {
         return
       }
@@ -68,10 +69,10 @@ export class WuCaiUtils {
         return
       }
       let matchRet = t1.matchAll(exp)
-      if (!matchRet || matchRet.length <= 0) {
+      if (!matchRet) {
         // append to the end of file
         t1 += this.wrapBlock(newCnt, bn)
-        return
+        return t1
       }
       let matchC = 0
       for (const match1 of matchRet) {
@@ -98,7 +99,7 @@ export class WuCaiUtils {
     t1 = t1 || ''
     const bns = Object.keys(newBlocks || {})
     bns.forEach((bn) => {
-      let exp = this.blocksRegExpMap.get(bn)
+      let exp = this.blocksRegExpMap[bn]
       if (!exp) {
         return
       }
@@ -107,13 +108,18 @@ export class WuCaiUtils {
         return
       }
       // 因为是整个替换，且只用替换第一个，所以用 exec
-      let match1 = exp.exec(t1)
-      if (!match1) {
+      // // 因为 exp 的 exec 是有状态的，所以需要重置 lastIndex
+      // exp.lastIndex = 0
+      let matchRet = t1.matchAll(exp)
+      if (!matchRet) {
         return
       }
-      let oldCnt = match1[0] || ''
-      // console.log(['replace', oldCnt, newCnt, match1])
-      t1 = t1.replace(oldCnt, newCnt)
+      for (const match1 of matchRet) {
+        let oldCnt = match1[0] || ''
+        // console.log(['replace', oldCnt, newCnt, match1])
+        t1 = t1.replace(oldCnt, newCnt)
+        break
+      }
     })
     return t1
   }
@@ -128,20 +134,31 @@ export class WuCaiUtils {
   }
 
   // 生成目标文件名
-  static generateFileName(nameStyle: number, { title = '', createAt = 0, noteIdX = '' }): string {
+  static generateFileName(titleStyle: number, { title = '', createAt = 0, noteIdX = '' }): string {
     let fn = ''
     let ts = new Date(createAt * 1000)
-    // if (1 === nameStyle) {
-    //   // 使用标题
-    // } else
-    if (2 === nameStyle) {
+    if (1 === titleStyle) {
+      // 使用标题
+      title = title || ''
+      title = title.replace(/[\s\t\n]+/g, ' ')
+      title = title.replace(/[、\/\*"'<>%\$#!~&;；={}()~+-:。，！；（）？\|]/g, '')
+      if (title.length <= 0) {
+        title = 'No title'
+      }
+      fn = this.formatDateTime(ts, 'YYYY/MM') + '/wucai-' + title
+    } else if (2 === titleStyle) {
       // 使用时间戳，有目录结构
-      fn = this.formatDateTime(ts, 'YYYY/MM') + '/' + this.formatDateTime(ts, 'YYYY-MM-DD')
+      fn = this.formatDateTime(ts, 'YYYY/MM') + '/wucai-' + this.formatDateTime(ts, 'YYYY-MM-DD')
     } else {
       // 使用时间戳，没有目录结构
-      fn = this.formatDateTime(ts, 'YYYY-MM-DD')
+      fn = 'wucai-' + this.formatDateTime(ts, 'YYYY-MM-DD')
     }
-    return `WuCai/WuCai-${fn}-${noteIdX}.md`
+    return `WuCai/${fn}-${noteIdX}.md`
+  }
+
+  static formatTime(ts: number): string {
+    let d1 = new Date(ts * 1000)
+    return this.formatDateTime(d1, 'YYYY-MM-DD HH:mm')
   }
 
   // 根据配置生成 tag 列表
@@ -192,26 +209,26 @@ export class WuCaiUtils {
   }
 
   // 生成的内容直接替换原有文件
-  static renderTemplate(holders: WuCaiHolders, templates: WuCaiTemplates, exportCfg: WuCaiExportConfig): string {
-    return templates.pageEngine.render(holders)
+  static renderTemplate(holders: WuCaiHolders, wucaiTemplate: WuCaiTemplates): string {
+    return wucaiTemplate.pageEngine.render(holders)
   }
 
   // 追加到文件末尾或替换文件里的局部内容
   static renderTemplateWithEditable(
     holders: WuCaiHolders,
     oldCnt: string,
-    templates: WuCaiTemplates,
+    wucaiTemplate: WuCaiTemplates,
     exportCfg: WuCaiExportConfig
   ): string {
+    // 1) 局部渲染
     let renderHolders: { [key: string]: string } = {}
-    if (templates.blocks.pagenote) {
-      renderHolders['pagenote'] = templates.pagenoteEngine.render(holders)
+    if (wucaiTemplate.blocks.pagenote) {
+      renderHolders['pagenote'] = wucaiTemplate.pagenoteEngine.render(holders)
     }
-    if (templates.blocks.highlights) {
-      renderHolders['highlights'] = templates.highlightsEngine.render(holders)
+    if (wucaiTemplate.blocks.highlights) {
+      renderHolders['highlights'] = wucaiTemplate.highlightsEngine.render(holders)
     }
-    console.log(['render holders', renderHolders])
-    // 3. 将 block 结果替换到文件里
+    // 2) 将 block 结果替换到文件里
     return this.replaceHolders(oldCnt, renderHolders, exportCfg.writeStyle)
   }
 }
