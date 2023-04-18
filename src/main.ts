@@ -21,8 +21,8 @@ import { WuCaiUtils } from './utils'
 import { WuCaiTemplates } from './templates'
 
 // the process.env variable will be replaced by its target value in the output main.js file
-const baseURL = 'http://localhost:22021' || 'https://marker.dotalk.cn'
-// const baseURL = process.env.WUCAI_SERVER_URL || 'https://marker.dotalk.cn'
+// const baseURL = 'http://localhost:22021' || 'https://marker.dotalk.cn'
+const baseURL = 'https://marker.dotalk.cn'
 const WAITING_STATUSES = ['PENDING', 'RECEIVED', 'STARTED', 'RETRY']
 const SUCCESS_STATUSES = ['SYNCING']
 const API_URL_INIT = '/apix/openapi/wucai/sync/init'
@@ -51,7 +51,6 @@ const DEFAULT_SETTINGS: WuCaiPluginSettings = {
     highlightStyle: 1,
     annotationStyle: 1,
     tagStyle: 1,
-    haveWuCaiTag: 2,
     obTemplate: '',
   },
 }

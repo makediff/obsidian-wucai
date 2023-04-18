@@ -163,7 +163,7 @@ export class WuCaiUtils {
 
   // 根据配置生成 tag 列表
   static formatTags(tags: Array<string>, exportCfg: WuCaiExportConfig): string {
-    let ret = []
+    let ret: Array<string> = []
     tags = tags || []
     const isNeedHashTag = exportCfg.tagStyle === 1
     tags.forEach((tag) => {
@@ -194,13 +194,6 @@ export class WuCaiUtils {
         }
       }
     })
-    if (exportCfg.haveWuCaiTag === 1) {
-      if (isNeedHashTag) {
-        ret.push('#五彩插件')
-      } else {
-        ret.push('[[五彩插件]]')
-      }
-    }
     return ret.join(' ')
   }
 

@@ -15,7 +15,6 @@ interface WuCaiExportConfig {
   highlightStyle: number
   annotationStyle: number
   tagStyle: number
-  haveWuCaiTag: number
   obTemplate: string
 }
 
