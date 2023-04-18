@@ -19,8 +19,7 @@ export class WuCaiTemplates {
 
   // https://mozilla.github.io/nunjucks/templating.html
   // 默认的页面模板
-  static Style001: string = `
----
+  static Style001: string = `---
 标题: "{{title}}"
 创建时间: {{createat}}
 ---
