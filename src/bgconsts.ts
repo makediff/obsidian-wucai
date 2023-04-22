@@ -3,7 +3,7 @@ export class BGCONSTS {
   static SERVICE_ID: number = 7
   static MARKET_INFO: string = 'obsidian-plugin'
   static ENDPOINT: string = 'obsidianwucai'
-  static VERSION: string = '23.4.18'
+  static VERSION: string = '23.4.23'
   static VERSION_NUM: number = 230418
   static IS_DEBUG: boolean = false
   static PRINT_LOG: boolean = false
