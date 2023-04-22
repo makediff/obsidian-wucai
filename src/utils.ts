@@ -141,7 +141,9 @@ export class WuCaiUtils {
       // 使用标题
       title = title || ''
       title = title.replace(/[\s\t\n]+/g, ' ')
-      title = title.replace(/[、\/\*"'<>%\$#!~&;；={}()~+-:。，！；（）？\|]/g, '')
+      // https://blog.csdn.net/xiejx618/article/details/17471819
+      // \ / : * ? " < > |
+      title = title.replace(/[?\\、\/\*"'<>%\$#!~&;；={}()~+-:。，！；（）？\|]/g, '')
       if (title.length <= 0) {
         title = 'No title'
       }
