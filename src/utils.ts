@@ -133,17 +133,46 @@ export class WuCaiUtils {
     return moment(date).format(format)
   }
 
+  // 按换行符切割后去两边空行，合并空行
+  static trimWithLine(coretxt: string): string {
+    if (!coretxt || coretxt.length <= 0) {
+      return ''
+    }
+    let arrCore = coretxt.split('\n')
+    let arr2 = []
+    if (arrCore.length > 1) {
+      for (let i2 = 0; i2 < arrCore.length; i2++) {
+        let _s2 = arrCore[i2]
+          .replace(/[\s\t]+/, ' ')
+          .replace(/[\r\n]+/g, '')
+          .trim()
+        if (_s2.length > 0) {
+          arr2.push(_s2)
+        }
+      }
+      coretxt = arr2.join('\n')
+    } else {
+      coretxt = coretxt.trim()
+    }
+    return coretxt
+  }
+
+  static normalTitle(title: string): string {
+    title = title || ''
+    title = title.replace(/[\s\t\n]+/g, ' ')
+    // https://blog.csdn.net/xiejx618/article/details/17471819
+    // \ / : * ? " < > |
+    title = title.replace(/[?\\、\/\*"'<>%\$#!~&;；={}()~+-:。，！；（）？\|]/g, '')
+    return title
+  }
+
   // 生成目标文件名
   static generateFileName(titleStyle: number, { title = '', createAt = 0, noteIdX = '' }): string {
     let fn = ''
     let ts = new Date(createAt * 1000)
     if (1 === titleStyle) {
       // 使用标题
-      title = title || ''
-      title = title.replace(/[\s\t\n]+/g, ' ')
-      // https://blog.csdn.net/xiejx618/article/details/17471819
-      // \ / : * ? " < > |
-      title = title.replace(/[?\\、\/\*"'<>%\$#!~&;；={}()~+-:。，！；（）？\|]/g, '')
+      title = this.normalTitle(title)
       if (title.length <= 0) {
         title = 'No title'
       }
@@ -151,7 +180,15 @@ export class WuCaiUtils {
     } else if (2 === titleStyle) {
       // 使用时间戳，有目录结构
       fn = this.formatDateTime(ts, 'YYYY/MM') + '/wucai-' + this.formatDateTime(ts, 'YYYY-MM-DD')
+    } else if (4 === titleStyle) {
+      // only title
+      title = this.normalTitle(title)
+      if (title.length <= 0) {
+        title = 'No title'
+      }
+      fn = 'wucai-' + title
     } else {
+      // title style is 3
       // 使用时间戳，没有目录结构
       fn = 'wucai-' + this.formatDateTime(ts, 'YYYY-MM-DD')
     }

@@ -1,6 +1,6 @@
 {
   "name": "wucai-highlights-official",
-  "version": "23.4.23",
+  "version": "23.4.24",
   "description": "Automatically syncs your WuCai highlights with Obsidian.",
   "main": "main.js",
   "scripts": {
