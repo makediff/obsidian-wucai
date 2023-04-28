@@ -56,7 +56,7 @@ export class WuCaiUtils {
 
   // t1 is old file content
   // 处理目标文件
-  static replaceHolders(t1: string, renderHolders: { [key: string]: string }, writeStyle: number = 1): string {
+  static replaceHolders(t1: string, renderHolders: { [key: string]: string }): string {
     t1 = t1 || ''
     const bns = Object.keys(renderHolders || {})
     bns.forEach((bn) => {
@@ -77,12 +77,8 @@ export class WuCaiUtils {
       let matchC = 0
       for (const match1 of matchRet) {
         let oldCnt = match1[1] || ''
-        if (writeStyle === 1) {
-          // overwrite
-          newCnt = '\n' + newCnt + '\n'
-        } else {
-          // append
-          newCnt = oldCnt + '\n' + newCnt + '\n'
+        if (oldCnt !== newCnt) {
+          newCnt = oldCnt + '\n' + newCnt
         }
         t1 = t1.replace(oldCnt, newCnt)
         matchC++
@@ -163,38 +159,56 @@ export class WuCaiUtils {
     // https://blog.csdn.net/xiejx618/article/details/17471819
     // \ / : * ? " < > |
     title = title.replace(/[?\\、\/\*"'<>%\$#!~&;；={}()~+-:。，！；（）？\|]/g, '')
+    if (title.length <= 0) {
+      return 'No title'
+    }
     return title
   }
 
-  // 生成目标文件名
-  static generateFileName(titleStyle: number, { title = '', createAt = 0, noteIdX = '' }): string {
-    let fn = ''
-    let ts = new Date(createAt * 1000)
-    if (1 === titleStyle) {
-      // 使用标题
-      title = this.normalTitle(title)
-      if (title.length <= 0) {
-        title = 'No title'
-      }
-      fn = this.formatDateTime(ts, 'YYYY/MM') + '/wucai-' + title
-    } else if (2 === titleStyle) {
-      // 使用时间戳，有目录结构
-      fn = this.formatDateTime(ts, 'YYYY/MM') + '/wucai-' + this.formatDateTime(ts, 'YYYY-MM-DD')
-    } else if (4 === titleStyle) {
-      // only title
-      title = this.normalTitle(title)
-      if (title.length <= 0) {
-        title = 'No title'
-      }
-      fn = 'wucai-' + title
-    } else {
-      // title style is 3
-      // 使用时间戳，没有目录结构
-      fn = 'wucai-' + this.formatDateTime(ts, 'YYYY-MM-DD')
-    }
-    return `WuCai/${fn}-${noteIdX}.md`
-  }
+  // // 处理老的配置是基于数值而非模板
+  // static getTitleTemplateByStyle(titleFormat: number): string {
+  //   let titleTpl = ''
+  //   // 将老版本的配置参数转换成新的
+  //   if (1 === titleFormat) {
+  //     // 2023/01/wucai-网页标题-X.md
+  //     titleTpl = `{{ createat_ts | date("YYYY/MM") }}/wucai-{{title}}`
+  //   } else if (2 === titleFormat) {
+  //     // 2023/01/wucai-20230102-X.md
+  //     titleTpl = `{{ createat_ts | date("YYYY/MM") }}/wucai-{{ createat_ts | date("YYYY-MM-DD") }}`
+  //   } else if (4 === titleFormat) {
+  //     // only title
+  //     titleTpl = `wucai-{{title}}`
+  //   } else {
+  //     // 使用时间戳，没有目录结构
+  //     titleTpl = 'wucai-{{ createat_ts | date("YYYY-MM-DD") }}'
+  //   }
+  //   return titleTpl
+  // }
 
+  // // 生成目标文件名，用于格式 1~4
+  // static generateFileName(titleFormat: number, { title = '', createAt = 0, noteIdX = '' }): string {
+  //   let fn = ''
+  //   let ts = new Date(createAt * 1000)
+  //   if (1 === titleFormat) {
+  //     // 使用标题
+  //     title = this.normalTitle(title)
+  //     fn = this.formatDateTime(ts, 'YYYY/MM') + '/wucai-' + title
+  //   } else if (2 === titleFormat) {
+  //     // 使用时间戳，有目录结构
+  //     fn = this.formatDateTime(ts, 'YYYY/MM') + '/wucai-' + this.formatDateTime(ts, 'YYYY-MM-DD')
+  //   } else if (4 === titleFormat) {
+  //     // only title
+  //     // title = this.normalTitle(title)
+  //     fn = 'wucai-' + title
+  //   } else {
+  //     // title style is 3
+  //     // 使用时间戳，没有目录结构
+  //     fn = 'wucai-' + this.formatDateTime(ts, 'YYYY-MM-DD')
+  //   }
+  //   return `WuCai/${fn}-${noteIdX}.md`
+  // }
+
+  // 通过时间（秒）获得一个默认的时间格式
   static formatTime(ts: number): string {
     let d1 = new Date(ts * 1000)
     return this.formatDateTime(d1, 'YYYY-MM-DD HH:mm')
@@ -241,26 +255,22 @@ export class WuCaiUtils {
   }
 
   // 生成的内容直接替换原有文件
-  static renderTemplate(holders: WuCaiHolders, wucaiTemplate: WuCaiTemplates): string {
+  static renderTemplate(holders: WuCaiPageContext, wucaiTemplate: WuCaiTemplates): string {
     return wucaiTemplate.pageEngine.render(holders)
   }
 
   // 追加到文件末尾或替换文件里的局部内容
-  static renderTemplateWithEditable(
-    holders: WuCaiHolders,
-    oldCnt: string,
-    wucaiTemplate: WuCaiTemplates,
-    exportCfg: WuCaiExportConfig
-  ): string {
+  static renderTemplateWithEditable(pageCtx: WuCaiPageContext, oldCnt: string, wucaiTemplate: WuCaiTemplates): string {
     // 1) 局部渲染
     let renderHolders: { [key: string]: string } = {}
     if (wucaiTemplate.blocks.pagenote) {
-      renderHolders['pagenote'] = wucaiTemplate.pagenoteEngine.render(holders)
+      renderHolders['pagenote'] = wucaiTemplate.pagenoteEngine.render(pageCtx)
     }
     if (wucaiTemplate.blocks.highlights) {
-      renderHolders['highlights'] = wucaiTemplate.highlightsEngine.render(holders)
+      renderHolders['highlights'] = wucaiTemplate.highlightsEngine.render(pageCtx)
     }
     // 2) 将 block 结果替换到文件里
-    return this.replaceHolders(oldCnt, renderHolders, exportCfg.writeStyle)
+    // writeStyle=2是追加
+    return this.replaceHolders(oldCnt, renderHolders)
   }
 }

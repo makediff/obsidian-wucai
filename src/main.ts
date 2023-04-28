@@ -21,8 +21,6 @@ import { WuCaiUtils } from './utils'
 import { WuCaiTemplates } from './templates'
 
 // the process.env variable will be replaced by its target value in the output main.js file
-// const baseURL = 'http://localhost:22021' || 'https://marker.dotalk.cn'
-const baseURL = 'https://marker.dotalk.cn'
 const WAITING_STATUSES = ['PENDING', 'RECEIVED', 'STARTED', 'RETRY']
 const SUCCESS_STATUSES = ['SYNCING']
 const API_URL_INIT = '/apix/openapi/wucai/sync/init'
@@ -44,14 +42,14 @@ const DEFAULT_SETTINGS: WuCaiPluginSettings = {
   notesToRefresh: [], // 待更新文件列表
   reimportShowConfirmation: true,
   lastCursor: '',
+  dataVersion: 0,
   exportConfig: {
-    titleFormat: 2,
     writeStyle: 2,
-    titleStyle: 2,
     highlightStyle: 1,
     annotationStyle: 1,
     tagStyle: 1,
     obTemplate: '',
+    titleTemplate: '',
   },
 }
 
@@ -73,7 +71,7 @@ const DEFAULT_SETTINGS: WuCaiPluginSettings = {
 // }
 
 function logger(msg: any) {
-  BGCONSTS.PRINT_LOG && console.log(msg)
+  BGCONSTS.IS_DEBUG && console.log(msg)
 }
 
 function localize(msg: string): string {
@@ -159,7 +157,7 @@ export default class WuCaiPlugin extends Plugin {
     params['v'] = BGCONSTS.VERSION_NUM
     params['serviceId'] = BGCONSTS.SERVICE_ID
     url += `?appid=${BGCONSTS.APPID}&ep=${BGCONSTS.ENDPOINT}&version=${BGCONSTS.VERSION}&reqtime=${reqtime}`
-    return fetch(baseURL + url, {
+    return fetch(BGCONSTS.BASE_URL + url, {
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' },
       method: 'POST',
       body: JSON.stringify(params),
@@ -174,20 +172,18 @@ export default class WuCaiPlugin extends Plugin {
       // 如果文件夹被删除，则重新同步
       this.settings.lastCursor = ''
       this.settings.notesToRefresh = []
-      logger(['onload last cursor, deleted,', this.settings.lastCursor, flagx])
-    } else {
-      logger(['onload last cursor, json, ', this.settings.lastCursor, flagx])
     }
+    logger({ msg: 'onload last cursor', lastCursor: this.settings.lastCursor, flagx, isDirDeleted })
     let lastCursor2 = this.settings.lastCursor
     let params = { noteDirDeleted: isDirDeleted, lastCursor2 }
     let rsp
     try {
       rsp = await this.callApi(API_URL_INIT, params)
     } catch (e) {
-      logger(['WuCai Official plugin: fetch failed in exportInit: ', e])
+      logger({ msg: 'WuCai Official plugin: fetch failed in exportInit: ', e })
     }
     if (!rsp || !rsp.ok) {
-      logger(['WuCai Official plugin: bad response in exportInit: ', rsp])
+      logger({ msg: 'WuCai Official plugin: bad response in exportInit: ', rsp })
       this.handleSyncError(buttonContext, this.getErrorMessageFromResponse(rsp))
       return
     }
@@ -198,14 +194,13 @@ export default class WuCaiPlugin extends Plugin {
     }
 
     let initRet: ExportInitRequestResponse = data2['data'] || {}
-    logger(['in exportInit', initRet, this.settings.lastCursor, flagx])
+    logger({ msg: 'in exportInit', initRet, lastCursor: this.settings.lastCursor, flagx })
 
-    // 记录导出配置
+    // 每次都使用最新的配置，并行重新预编译模板
     this.settings.exportConfig = initRet.exportConfig
-    // 提前编译模板
     const compileErrMessage = this.pageTemplate.precompile(initRet.exportConfig.obTemplate)
 
-    // 通过服务端计算来确定当前需要从哪个id开始同步笔记
+    // 处理同步点位
     let tmpCursor = this.getLastCursor(initRet.lastCursor2, this.settings.lastCursor)
     if (tmpCursor) {
       this.settings.lastCursor = tmpCursor
@@ -231,7 +226,10 @@ export default class WuCaiPlugin extends Plugin {
       await this.exportInit(buttonContext, false, 'exportInit timeout')
     } else if (SUCCESS_STATUSES.includes(initRet.taskStatus)) {
       this.notice('Syncing WuCai data')
-      return this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx || 'init')
+      // 1) 先将同步点位之前有更新的数据更新完
+      // 2) 再从点位开始，将新数据同步过来
+      // await this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx || 'init+ck', true)
+      await this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx || 'init')
     } else {
       this.handleSyncError(buttonContext, 'Sync failed,' + initRet.taskStatus)
     }
@@ -263,8 +261,12 @@ export default class WuCaiPlugin extends Plugin {
   }
 
   getAuthHeaders() {
+    let tk = this.settings.token || ''
+    if (tk.length <= 0 && BGCONSTS.IS_DEBUG && BGCONSTS.TEST_TOKEN) {
+      tk = BGCONSTS.TEST_TOKEN
+    }
     return {
-      AUTHORIZATION: `Token ${this.settings.token}`,
+      AUTHORIZATION: `Token ${tk}`,
       'Obsidian-Client': `${this.getObsidianClientID()}`,
     }
   }
@@ -282,20 +284,27 @@ export default class WuCaiPlugin extends Plugin {
   }
 
   // 遍历页面并生成文件
-  async processEntity(entry: NoteEntry) {
-    if (!entry) {
-      return
+  async processEntity(entry: NoteEntry, titleTpl: string) {
+    let filename: string
+    if (WuCaiTemplates.isNeedRender(titleTpl)) {
+      const titleTemplate = this.pageTemplate.getTitleTemplateByStr(titleTpl)
+      filename = titleTemplate.render({
+        title: WuCaiUtils.normalTitle(entry.title),
+        createat_ts: entry.createAt,
+      })
+    } else {
+      filename = titleTpl
     }
-    const exportCfg = this.settings.exportConfig
-    const filename = WuCaiUtils.generateFileName(exportCfg.titleFormat, {
-      title: entry.title,
-      createAt: entry.createAt,
-      noteIdX: entry.noteIdX,
-    })
-    const distFileName = normalizePath(filename.replace(/^WuCai/, this.settings.wuCaiDir)).replace(/[\/ \s]+$/, '')
+
+    // 设定在指定目录下，且添加笔记标识
+    filename = `${this.settings.wuCaiDir}/${filename}-${entry.noteIdX}.md`
+
+    const distFileName = normalizePath(filename).replace(/[\/ \s]+$/, '')
     if (!distFileName || distFileName.length <= 0) {
       return
     }
+
+    const exportCfg = this.settings.exportConfig
     try {
       // const contents = await entry.getData(new zip.TextWriter())
       // 计算出笔记的最终路径和名字
@@ -304,29 +313,35 @@ export default class WuCaiPlugin extends Plugin {
       if (!fileInfo || !(fileInfo instanceof TFolder)) {
         await this.app.vault.createFolder(dirPath)
       }
-      const holders: WuCaiHolders = {
+      const pageCtx: WuCaiPageContext = {
         title: entry.title,
         url: entry.url,
+        wucaiurl: entry.wuCaiUrl,
         tags: WuCaiUtils.formatTags(entry.tags, exportCfg),
         pagenote: entry.pageNote,
         highlights: entry.highlights,
         createat: WuCaiUtils.formatTime(entry.createAt),
+        createat_ts: entry.createAt,
         updateat: WuCaiUtils.formatTime(entry.updateAt),
+        updateat_ts: entry.updateAt,
+        noteid: entry.noteIdX,
+        citekey: entry.citekey || '',
+        author: entry.author || '',
       }
       const noteFile = await this.app.vault.getAbstractFileByPath(distFileName)
       const isNoteExists = noteFile && noteFile instanceof TFile
       if (!isNoteExists || WRITE_STYLE_OVERWRITE === exportCfg.writeStyle) {
-        let contents = WuCaiUtils.renderTemplate(holders, this.pageTemplate)
+        // 全量渲染整个页面里的所有内容
+        const contents = WuCaiUtils.renderTemplate(pageCtx, this.pageTemplate)
         if (isNoteExists) {
           await this.app.vault.modify(noteFile, contents)
         } else {
-          logger(['wucai, create new mk file', distFileName])
           await this.app.vault.create(distFileName, contents)
         }
       } else if (WRITE_STYLE_APPEND === exportCfg.writeStyle) {
-        // 这里有两种逻辑：1追加，2局部替换（主要通过模板里的占位符来区分）
+        // 局部更新，仅会更新页面笔记和划线列表，添加到尾部，其他部分不改动
         const oldCnt = await this.app.vault.read(noteFile)
-        let contents = WuCaiUtils.renderTemplateWithEditable(holders, oldCnt, this.pageTemplate, exportCfg)
+        const contents = WuCaiUtils.renderTemplateWithEditable(pageCtx, oldCnt, this.pageTemplate)
         await this.app.vault.modify(noteFile, contents)
       } else {
         // write style error, do nothing
@@ -335,11 +350,12 @@ export default class WuCaiPlugin extends Plugin {
     } catch (e) {
       logger([`WuCai Official plugin: error writing ${distFileName}:`, e])
       this.notice(`WuCai: error while writing ${distFileName}: ${e}`, true, 4, true)
-      if (entry.noteId) {
-        this.settings.notesToRefresh.push(entry.noteId + '')
+      if (entry.noteIdX) {
+        this.settings.notesToRefresh.push(entry.noteIdX)
         await this.saveSettings()
       }
     }
+    return
   }
 
   // 指定范围或指定笔记进行同步
@@ -347,7 +363,8 @@ export default class WuCaiPlugin extends Plugin {
     lastCursor2: string,
     noteIdXs: Array<string>,
     buttonContext: ButtonComponent,
-    flagx = ''
+    flagx: string = '',
+    checkUpdate: boolean = false
   ): Promise<void> {
     let response
     const writeStyle = this.settings.exportConfig.writeStyle
@@ -357,13 +374,14 @@ export default class WuCaiPlugin extends Plugin {
         noteIdXs,
         flagx,
         writeStyle,
-        out: 'json',
+        out: BGCONSTS.OUT,
+        checkUpdate,
       })
     } catch (e) {
-      logger(['WuCai Official plugin: fetch failed in downloadArchive: ', e])
+      logger({ msg: 'WuCai Official plugin: fetch failed in downloadArchive: ', e })
     }
     if (!response || !response.ok) {
-      logger(['WuCai Official plugin: bad response in downloadArchive: ', response])
+      logger({ msg: 'WuCai Official plugin: bad response in downloadArchive: ', response })
       this.handleSyncError(buttonContext, this.getErrorMessageFromResponse(response))
       return
     }
@@ -375,7 +393,6 @@ export default class WuCaiPlugin extends Plugin {
     }
 
     const downloadRet: ExportDownloadResponse = data2['data']
-
     let entries: Array<NoteEntry> = downloadRet.notes || []
 
     // const blobReader = new zip.BlobReader(blob)
@@ -389,11 +406,19 @@ export default class WuCaiPlugin extends Plugin {
     const isPartsDownload: boolean = noteIdXs.length > 0
     const entriesCount = entries.length
 
-    // 保存同步过来的文件
-    let ii = 0
+    // 预编译标题模板
+    const exportCfg = this.settings.exportConfig
+    let titleTpl: string = exportCfg.titleTemplate || 'wucai-{{ createat_ts | date("YYYY-MM-DD") }}'
+    // 去掉标题里的换行
+    titleTpl = titleTpl.replace(/[\n]+/, '').trim()
+
+    let ii = 1
     for (const entry of entries) {
-      await this.processEntity(entry)
-      if (BGCONSTS.IS_DEBUG && ++ii > 37) {
+      if (!entry) {
+        continue
+      }
+      await this.processEntity(entry, titleTpl)
+      if (BGCONSTS.IS_DEBUG && ii++ > 47) {
         // for debug
         break
       }
@@ -401,17 +426,16 @@ export default class WuCaiPlugin extends Plugin {
 
     let isCompleted = false
     if (isPartsDownload) {
-      // 当前是指定笔记进行同步，所以每次就代表是一组同步完成
+      // 当前是指定笔记进行同步，所以每次就代表一组同步完成
       isCompleted = true
     } else {
       // 更新同步位置
       let tmpCursor = this.getLastCursor(downloadRet.lastCursor2, lastCursor2)
       if (tmpCursor) {
         this.settings.lastCursor = tmpCursor
-        // 当前是通过偏移量范围进行同步
         isCompleted = entriesCount <= 0
       } else {
-        // 因为某种原因导致的定位不准，结束同步
+        // 因为某种原因导致的定位异常，结束同步
         isCompleted = true
       }
     }
@@ -506,11 +530,11 @@ export default class WuCaiPlugin extends Plugin {
     logger(['started sync', this.settings.isSyncing])
     if (this.settings.isSyncing) {
       this.notice('WuCai sync already in progress', true)
-    } else {
-      this.settings.isSyncing = true
-      this.saveSettings()
-      this.exportInit(null, false, 'startSync init')
+      return
     }
+    this.settings.isSyncing = true
+    this.saveSettings()
+    this.exportInit(null, false, 'startSync init')
   }
 
   async onload() {
@@ -519,6 +543,7 @@ export default class WuCaiPlugin extends Plugin {
       this.statusBar = new StatusBar(this.addStatusBarItem())
       this.registerInterval(window.setInterval(() => this.statusBar.display(), 1000))
     }
+    let thiz = this
     await this.loadSettings()
     // this.registerEvent(
     //   this.app.vault.on('delete', async (file) => {
@@ -617,26 +642,28 @@ export default class WuCaiPlugin extends Plugin {
     //   },
     // })
     // this.registerMarkdownPostProcessor((el, ctx) => {
-    //   if (!ctx.sourcePath.startsWith(this.settings.wuCaiDir)) {
+    //   logger({ msg: 'registerMarkdownPostProcessor', pth: ctx.sourcePath, d: thiz.settings.wuCaiDir })
+    //   if (!ctx.sourcePath.startsWith(thiz.settings.wuCaiDir)) {
     //     return
     //   }
-    //   let matches: string[]
-    //   try {
-    //     // @ts-ignore
-    //     matches = [...ctx.getSectionInfo(el).text.matchAll(/__(.+)__/g)].map((a) => a[1])
-    //   } catch (TypeError) {
-    //     // failed interaction with a Dataview element
-    //     return
-    //   }
-    //   const hypers = el.findAll('strong').filter((e) => matches.contains(e.textContent))
-    //   hypers.forEach((strongEl) => {
-    //     const replacement = el.createEl('span')
-    //     while (strongEl.firstChild) {
-    //       replacement.appendChild(strongEl.firstChild)
-    //     }
-    //     replacement.addClass('wc-hyper-highlight')
-    //     strongEl.replaceWith(replacement)
-    //   })
+
+    //   // let matches: string[]
+    //   // try {
+    //   //   // @ts-ignore
+    //   //   matches = [...ctx.getSectionInfo(el).text.matchAll(/__(.+)__/g)].map((a) => a[1])
+    //   // } catch (TypeError) {
+    //   //   // failed interaction with a Dataview element
+    //   //   return
+    //   // }
+    //   // const hypers = el.findAll('strong')//.filter((e) => matches.contains(e.textContent))
+    //   // hypers.forEach((strongEl) => {
+    //   //   const replacement = el.createEl('span')
+    //   //   while (strongEl.firstChild) {
+    //   //     replacement.appendChild(strongEl.firstChild)
+    //   //   }
+    //   //   replacement.addClass('wc-hyper-highlight')
+    //   //   strongEl.replaceWith(replacement)
+    //   // })
     // })
     this.addSettingTab(new WuCaiSettingTab(this.app, this))
     await this.configureSchedule()
@@ -687,17 +714,17 @@ export default class WuCaiPlugin extends Plugin {
   async getUserAuthToken(button: HTMLElement, attempt = 0) {
     let uuid = this.getObsidianClientID()
     if (attempt === 0) {
-      window.open(`${baseURL}/page/gentoken/${BGCONSTS.SERVICE_ID}/${uuid}`)
+      window.open(`${BGCONSTS.BASE_URL}/page/gentoken/${BGCONSTS.SERVICE_ID}/${uuid}`)
     }
     let response
     try {
       let url = '/page/auth/openapi/gettoken'
       response = await this.callApi(url, { did: uuid })
     } catch (e) {
-      logger(['WuCai Official plugin: fetch failed in getUserAuthToken: ', e])
+      logger({ msg: 'WuCai Official plugin: fetch failed in getUserAuthToken: ', e })
     }
     if (!response || !response.ok) {
-      logger(['WuCai Official plugin: bad response in getUserAuthToken: ', response])
+      logger({ msg: 'WuCai Official plugin: bad response in getUserAuthToken: ', response })
       this.showInfoStatus(button.parentElement, 'Authorization failed. Try again', 'wc-error')
       return
     }
@@ -708,10 +735,10 @@ export default class WuCaiPlugin extends Plugin {
       this.settings.token = data.accessToken
     } else {
       if (attempt > 20) {
-        logger('WuCai Official plugin: reached attempt limit in getUserAuthToken')
+        logger({ msg: 'WuCai Official plugin: reached attempt limit in getUserAuthToken' })
         return
       }
-      logger(`WuCai Official plugin: didn't get token data, retrying (attempt ${attempt + 1})`)
+      logger({ msg: `WuCai Official plugin: didn't get token data`, attempt })
       await new Promise((resolve) => setTimeout(resolve, 1000))
       await this.getUserAuthToken(button, attempt + 1)
     }
@@ -730,13 +757,12 @@ class WuCaiSettingTab extends PluginSettingTab {
 
   display(): void {
     let { containerEl } = this
-
     containerEl.empty()
     containerEl.createEl('h1', { text: 'WuCai Highlights Official' })
     containerEl
       .createEl('p', { text: 'Created by ' })
       .createEl('a', { text: '希果壳五彩插件', href: 'https://www.dotalk.cn/product/wucai' })
-    containerEl.getElementsByTagName('p')[0].appendText(' 🚀🚀')
+    containerEl.getElementsByTagName('p')[0].appendText(` Version ${BGCONSTS.VERSION}`)
     containerEl.createEl('h2', { text: 'Settings' })
 
     let token = this.plugin.settings.token
@@ -752,10 +778,6 @@ class WuCaiSettingTab extends PluginSettingTab {
             .setButtonText('Initiate Sync')
             .onClick(async () => {
               if (this.plugin.settings.isSyncing) {
-                // NOTE: This is used to prevent multiple syncs at the same time. However, if a previous sync fails,
-                //  it can stop new syncs from happening. Make sure to set isSyncing to false
-                //  if there's ever errors/failures in previous sync attempts, so that
-                //  we don't block syncing subsequent times.
                 new Notice('WuCai sync already in progress')
               } else {
                 this.plugin.clearInfoStatus(containerEl)
@@ -774,7 +796,7 @@ class WuCaiSettingTab extends PluginSettingTab {
         .setDesc('You can customize which items export to Obsidian and how they appear from the WuCai website')
         .addButton((button) => {
           button.setButtonText('Customize').onClick(() => {
-            window.open(`${baseURL}/page/plugins/obsidian/preferences`)
+            window.open(`${BGCONSTS.BASE_URL}/page/plugins/obsidian/preferences`)
           })
         })
 
@@ -806,11 +828,8 @@ class WuCaiSettingTab extends PluginSettingTab {
           dropdown.setValue(this.plugin.settings.frequency)
 
           dropdown.onChange((newValue) => {
-            // update the plugin settings
             this.plugin.settings.frequency = newValue
             this.plugin.saveSettings()
-
-            // destroy & re-create the scheduled task
             this.plugin.configureSchedule()
           })
         })
@@ -852,7 +871,7 @@ class WuCaiSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName('Connect Obsidian to WuCai')
         .setClass('wc-setting-connect')
-        .setDesc('The WuCai plugin enables automatic syncing of all your highlights . Note: Requires WuCai account.')
+        .setDesc('The WuCai plugin enables automatic syncing of all your highlights. Note: Requires WuCai account.')
         .addButton((button) => {
           button
             .setButtonText('Connect')

@@ -9,9 +9,8 @@ interface WuCaiExportLastCursor {
 }
 
 interface WuCaiExportConfig {
-  titleFormat: number
+  titleTemplate: string // 23.4.27 标题模板格式
   writeStyle: number // 写文件方式：1覆盖（默认），2追加
-  titleStyle: number
   highlightStyle: number
   annotationStyle: number
   tagStyle: number
@@ -38,14 +37,20 @@ interface WuCaiBlocks {
   highlights: string
 }
 
-interface WuCaiHolders {
+interface WuCaiPageContext {
   title: string
   url: string
+  wucaiurl: string
   tags: string
   pagenote: string
   highlights: Array<HighlightInfo>
   createat: string
   updateat: string
+  noteid: string
+  createat_ts: number // 时间戳
+  updateat_ts: number
+  citekey: string
+  author: string
 }
 
 interface HighlightInfo {
@@ -54,6 +59,7 @@ interface HighlightInfo {
   updateAt: number
   annonation: string
   color: string
+  slotId: number
 }
 
 interface NoteEntry {
@@ -68,6 +74,8 @@ interface NoteEntry {
   category: string
   tags: Array<string>
   highlights: Array<HighlightInfo>
+  citekey: string
+  author: string
 }
 
 interface NoteIdInfo {
@@ -88,5 +96,20 @@ interface WuCaiPluginSettings {
   exportConfig: WuCaiExportConfig
 
   refreshNotes: boolean
-  notesToRefresh: Array<string> // 更新出现异常的网页
+  notesToRefresh: Array<string> // 更新出现异常的noteidx
+  dataVersion: number // 本地数据版本号
+}
+
+interface FilterPrettyOptions {
+  prefix: string // 每行的前导符
+  trim: boolean // 是否对行进行trim
+  color: string // 是否在第一行加一个颜色
+}
+
+interface FilterStyle1Options {
+  prefix: string // 每行的前导符
+  trim: boolean // 是否对行进行trim
+  color: string // 是否在第一行加一个颜色
+  anno: string // 想法前导符
+  color_tags: Array<string>
 }
