@@ -10,7 +10,7 @@ Note: This plugin requires a subscription with [希果壳五彩](https://www.dot
 
 ## Features
 
-* **Continuous, automatic syncing** — Take a highlight while reading in bed and wake up to the highlight in your Obsidian vault
+* **Continuous, automatic syncing** — Take a highlight to the highlight in your Obsidian vault
 
 ## Usage
 

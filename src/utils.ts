@@ -18,8 +18,8 @@ export class WuCaiUtils {
 
   // 从目标文件提取占位符
   static holdersRegExpMap: { [key: string]: RegExp } = {
-    highlights: new RegExp('%%\\s*begin\\s*highlights\\s*%%([\\s\\S]*?)%%\\s*end\\s+highlights\\s*%%', 'ig'),
-    pagenote: new RegExp('%%\\s*begin\\s*pagenote\\s*%%([\\s\\S]*?)%%\\s*end\\s+pagenote\\s*%%', 'ig'),
+    highlights: new RegExp('(%%\\s*begin\\s+highlights\\s*%%([\\s\\S]*?)%%\\s*end\\s+highlights\\s*%%)', 'ig'),
+    pagenote: new RegExp('(%%\\s*begin\\s+pagenote\\s*%%([\\s\\S]*?)%%\\s*end\\s+pagenote\\s*%%)', 'ig'),
   }
 
   // 从 t1 模板里，找出需要的 block 和其对应的模板代码
@@ -56,6 +56,7 @@ export class WuCaiUtils {
 
   // t1 is old file content
   // 处理目标文件
+  // 基于占位符的局部更新策略
   static replaceHolders(t1: string, renderHolders: { [key: string]: string }): string {
     t1 = t1 || ''
     const bns = Object.keys(renderHolders || {})
@@ -76,12 +77,11 @@ export class WuCaiUtils {
       }
       let matchC = 0
       for (const match1 of matchRet) {
-        let oldCnt = match1[1] || ''
-        if (oldCnt !== newCnt) {
-          newCnt = oldCnt + '\n' + newCnt
-        }
-        t1 = t1.replace(oldCnt, newCnt)
+        let blockLen = match1[1].length
+        let suffixCnt = t1.substring(match1.index + blockLen)
+        t1 = t1.substring(0, match1.index) + this.wrapBlockNoBreak(newCnt, bn) + suffixCnt
         matchC++
+        break
       }
       if (matchC <= 0) {
         t1 += this.wrapBlock(newCnt, bn)
@@ -250,8 +250,12 @@ export class WuCaiUtils {
     return ret.join(' ')
   }
 
-  static wrapBlock(cnt: string, name: string): string {
+  static wrapBlock(cnt: string, name: string, gap: string = '\n'): string {
     return `\n%%begin ${name}%%\n${cnt}\n%%end ${name}%%\n`
+  }
+
+  static wrapBlockNoBreak(cnt: string, name: string): string {
+    return `%%begin ${name}%%\n${cnt}\n%%end ${name}%%`
   }
 
   // 生成的内容直接替换原有文件
@@ -264,13 +268,18 @@ export class WuCaiUtils {
     // 1) 局部渲染
     let renderHolders: { [key: string]: string } = {}
     if (wucaiTemplate.blocks.pagenote) {
-      renderHolders['pagenote'] = wucaiTemplate.pagenoteEngine.render(pageCtx)
+      let pageNote = wucaiTemplate.pagenoteEngine.render(pageCtx)
+      if (pageNote) {
+        renderHolders['pagenote'] = pageNote
+      }
     }
     if (wucaiTemplate.blocks.highlights) {
-      renderHolders['highlights'] = wucaiTemplate.highlightsEngine.render(pageCtx)
+      let lights = wucaiTemplate.highlightsEngine.render(pageCtx)
+      if (lights) {
+        renderHolders['highlights'] = lights
+      }
     }
-    // 2) 将 block 结果替换到文件里
-    // writeStyle=2是追加
+    // 2) 将 block 结果追加到指定占位符
     return this.replaceHolders(oldCnt, renderHolders)
   }
 }

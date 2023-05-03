@@ -228,8 +228,7 @@ export default class WuCaiPlugin extends Plugin {
       this.notice('Syncing WuCai data')
       // 1) 先将同步点位之前有更新的数据更新完
       // 2) 再从点位开始，将新数据同步过来
-      // await this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx || 'init+ck', true)
-      await this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx || 'init')
+      await this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx + ' init+ck', true)
     } else {
       this.handleSyncError(buttonContext, 'Sync failed,' + initRet.taskStatus)
     }
@@ -262,9 +261,6 @@ export default class WuCaiPlugin extends Plugin {
 
   getAuthHeaders() {
     let tk = this.settings.token || ''
-    if (tk.length <= 0 && BGCONSTS.IS_DEBUG && BGCONSTS.TEST_TOKEN) {
-      tk = BGCONSTS.TEST_TOKEN
-    }
     return {
       AUTHORIZATION: `Token ${tk}`,
       'Obsidian-Client': `${this.getObsidianClientID()}`,
@@ -316,7 +312,7 @@ export default class WuCaiPlugin extends Plugin {
       const pageCtx: WuCaiPageContext = {
         title: entry.title,
         url: entry.url,
-        wucaiurl: entry.wuCaiUrl,
+        wucaiurl: entry.wuCaiUrl || '',
         tags: WuCaiUtils.formatTags(entry.tags, exportCfg),
         pagenote: entry.pageNote,
         highlights: entry.highlights,
@@ -368,6 +364,7 @@ export default class WuCaiPlugin extends Plugin {
   ): Promise<void> {
     let response
     const writeStyle = this.settings.exportConfig.writeStyle
+    logger({ msg: 'download', checkUpdate, flagx, lastCursor2 })
     try {
       response = await this.callApi(API_URL_DOWNLOAD, {
         lastCursor2,
@@ -412,16 +409,11 @@ export default class WuCaiPlugin extends Plugin {
     // 去掉标题里的换行
     titleTpl = titleTpl.replace(/[\n]+/, '').trim()
 
-    let ii = 1
     for (const entry of entries) {
       if (!entry) {
         continue
       }
       await this.processEntity(entry, titleTpl)
-      if (BGCONSTS.IS_DEBUG && ii++ > 47) {
-        // for debug
-        break
-      }
     }
 
     let isCompleted = false
@@ -445,22 +437,23 @@ export default class WuCaiPlugin extends Plugin {
     // await zipReader.close()
 
     if (isCompleted) {
-      await this.acknowledgeSyncCompleted(buttonContext)
-      this.handleSyncSuccess(buttonContext, 'Synced!', this.settings.lastCursor)
-      this.notice('WuCai sync completed', true, 1, true)
-      // @ts-ignore
-      if (Platform.isMobileApp) {
-        this.notice("If you don't see all of your WuCai files reload obsidian app", true)
+      if (checkUpdate) {
+        // 如果检查更新完成，则开始增量同步
+        this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx, !checkUpdate)
+      } else {
+        await this.acknowledgeSyncCompleted(buttonContext)
+        this.handleSyncSuccess(buttonContext, 'Synced!', this.settings.lastCursor)
+        this.notice('WuCai sync completed', true, 1, true)
+        // @ts-ignore
+        if (Platform.isMobileApp) {
+          this.notice("If you don't see all of your WuCai files reload obsidian app", true)
+        }
       }
-    } else if (BGCONSTS.IS_DEBUG) {
-      await this.acknowledgeSyncCompleted(buttonContext)
-      this.handleSyncSuccess(buttonContext, 'Synced! debug mode', this.settings.lastCursor)
-      this.notice('WuCai sync completed, in debug mode', true, 1, true)
-    } else if (!BGCONSTS.IS_DEBUG) {
+    } else {
       this.handleSyncSuccess(buttonContext, 'syncing', this.settings.lastCursor)
       // this.notice('WuCai is syncing, ' + exportID, true, 1, true)
       await new Promise((resolve) => setTimeout(resolve, 5000))
-      this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx)
+      this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx, checkUpdate)
     }
   }
 

@@ -9,7 +9,7 @@ interface WuCaiExportLastCursor {
 }
 
 interface WuCaiExportConfig {
-  titleTemplate: string // 23.4.27 标题模板格式
+  titleTemplate: string // 标题模板格式
   writeStyle: number // 写文件方式：1覆盖（默认），2追加
   highlightStyle: number
   annotationStyle: number
