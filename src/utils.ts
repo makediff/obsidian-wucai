@@ -282,4 +282,15 @@ export class WuCaiUtils {
     // 2) 将 block 结果追加到指定占位符
     return this.replaceHolders(oldCnt, renderHolders)
   }
+
+  static getDirFromPath(p: string) {
+    if (!p) {
+      return ''
+    }
+    const idx = p.lastIndexOf('/')
+    if (idx <= 0) {
+      return ''
+    }
+    return p.substring(0, idx)
+  }
 }

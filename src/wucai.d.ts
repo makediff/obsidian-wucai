@@ -98,6 +98,9 @@ interface WuCaiPluginSettings {
   refreshNotes: boolean
   notesToRefresh: Array<string> // 更新出现异常的noteidx
   dataVersion: number // 本地数据版本号
+
+  // 记录笔记对应的路径, key 是笔记id, value 是路径
+  notePaths: { [key: string]: string } 
 }
 
 interface FilterPrettyOptions {

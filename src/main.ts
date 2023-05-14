@@ -43,6 +43,7 @@ const DEFAULT_SETTINGS: WuCaiPluginSettings = {
   reimportShowConfirmation: true,
   lastCursor: '',
   dataVersion: 0,
+  notePaths: {},
   exportConfig: {
     writeStyle: 2,
     highlightStyle: 1,
@@ -172,6 +173,7 @@ export default class WuCaiPlugin extends Plugin {
       // 如果文件夹被删除，则重新同步
       this.settings.lastCursor = ''
       this.settings.notesToRefresh = []
+      this.settings.notePaths = {}
     }
     logger({ msg: 'onload last cursor', lastCursor: this.settings.lastCursor, flagx, isDirDeleted })
     let lastCursor2 = this.settings.lastCursor
@@ -292,22 +294,45 @@ export default class WuCaiPlugin extends Plugin {
       filename = titleTpl
     }
 
-    // 设定在指定目录下，且添加笔记标识
+    // 根据规则生成文件路径
     filename = `${this.settings.wuCaiDir}/${filename}-${entry.noteIdX}.md`
 
-    const distFileName = normalizePath(filename).replace(/[\/ \s]+$/, '')
-    if (!distFileName || distFileName.length <= 0) {
+    const outFilename = normalizePath(filename).replace(/[\/ \s]+$/, '')
+    if (!outFilename || outFilename.length <= 0) {
       return
     }
+
+    let isDirChecked = false
+    const oldPath = this.settings.notePaths[entry.noteIdX] || ''
+    if (oldPath && oldPath != outFilename) {
+      // 将本地的文件rename成新的文件，因为文件标题有改动
+      const oldPathInfo = await this.app.vault.getAbstractFileByPath(oldPath)
+      if (oldPathInfo && oldPathInfo instanceof TFile) {
+        const dirPath = WuCaiUtils.getDirFromPath(outFilename)
+        if (dirPath) {
+          const fileInfo = await this.app.vault.getAbstractFileByPath(dirPath)
+          if (!fileInfo || !(fileInfo instanceof TFolder)) {
+            await this.app.vault.createFolder(dirPath)
+            isDirChecked = true
+          }
+        }
+        await this.app.vault.rename(oldPathInfo, outFilename)
+      }
+    }
+
+    this.settings.notePaths[entry.noteIdX] = outFilename
 
     const exportCfg = this.settings.exportConfig
     try {
       // const contents = await entry.getData(new zip.TextWriter())
-      // 计算出笔记的最终路径和名字
-      let dirPath = distFileName.substring(0, distFileName.lastIndexOf('/'))
-      const fileInfo = await this.app.vault.getAbstractFileByPath(dirPath)
-      if (!fileInfo || !(fileInfo instanceof TFolder)) {
-        await this.app.vault.createFolder(dirPath)
+      if (!isDirChecked) {
+        const dirPath = WuCaiUtils.getDirFromPath(outFilename)
+        if (dirPath) {
+          const fileInfo = await this.app.vault.getAbstractFileByPath(dirPath)
+          if (!fileInfo || !(fileInfo instanceof TFolder)) {
+            await this.app.vault.createFolder(dirPath)
+          }
+        }
       }
       const pageCtx: WuCaiPageContext = {
         title: entry.title,
@@ -324,7 +349,7 @@ export default class WuCaiPlugin extends Plugin {
         citekey: entry.citekey || '',
         author: entry.author || '',
       }
-      const noteFile = await this.app.vault.getAbstractFileByPath(distFileName)
+      const noteFile = await this.app.vault.getAbstractFileByPath(outFilename)
       const isNoteExists = noteFile && noteFile instanceof TFile
       if (!isNoteExists || WRITE_STYLE_OVERWRITE === exportCfg.writeStyle) {
         // 全量渲染整个页面里的所有内容
@@ -332,7 +357,7 @@ export default class WuCaiPlugin extends Plugin {
         if (isNoteExists) {
           await this.app.vault.modify(noteFile, contents)
         } else {
-          await this.app.vault.create(distFileName, contents)
+          await this.app.vault.create(outFilename, contents)
         }
       } else if (WRITE_STYLE_APPEND === exportCfg.writeStyle) {
         // 局部更新，仅会更新页面笔记和划线列表，添加到尾部，其他部分不改动
@@ -344,8 +369,8 @@ export default class WuCaiPlugin extends Plugin {
         this.notice(`WuCai: error writeStyle ${exportCfg.writeStyle}`, true, 4, true)
       }
     } catch (e) {
-      logger([`WuCai Official plugin: error writing ${distFileName}:`, e])
-      this.notice(`WuCai: error while writing ${distFileName}: ${e}`, true, 4, true)
+      logger([`WuCai Official plugin: error writing ${outFilename}:`, e])
+      this.notice(`WuCai: error while writing ${outFilename}: ${e}`, true, 4, true)
       if (entry.noteIdX) {
         this.settings.notesToRefresh.push(entry.noteIdX)
         await this.saveSettings()
@@ -813,7 +838,7 @@ class WuCaiSettingTab extends PluginSettingTab {
         )
         .addDropdown((dropdown) => {
           dropdown.addOption('0', 'Manual')
-          dropdown.addOption('60', 'Every 1 hour')
+          dropdown.addOption('180', 'Every 3 hour')
           dropdown.addOption((12 * 60).toString(), 'Every 12 hours')
           dropdown.addOption((24 * 60).toString(), 'Every 24 hours')
 
