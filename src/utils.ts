@@ -158,7 +158,8 @@ export class WuCaiUtils {
     title = title.replace(/[\s\t\n]+/g, ' ')
     // https://blog.csdn.net/xiejx618/article/details/17471819
     // \ / : * ? " < > |
-    title = title.replace(/[?\\、\/\*"'<>%\$#!~&;；={}()~+-:。，！；（）？\|]/g, '')
+    // 23.5.31 修复短横线需要转移问题
+    title = title.replace(/[\~\\、\/\*"'<>%\$#&;；{}()=+\-:?？。，！!（）\|]/g, '')
     if (title.length <= 0) {
       return 'No title'
     }
