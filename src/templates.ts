@@ -35,7 +35,7 @@ export class WuCaiTemplates {
 ---
 
 ## {{title}} 
-{{tags}} #五彩插件 {{createat}} [原文]({{url}})
+{{tags}} #五彩插件 [原文]({{url}})
 
 ## 页面笔记
 {% block pagenote %}
@@ -93,10 +93,11 @@ export class WuCaiTemplates {
       let imageUrl = item.imageUrl
       let note = item.note || ''
       let anno = item.annonation || ''
-      let color = options.color || ''
       let prefix = options.prefix || ''
       let annoPrefix = options.anno || ''
       let colorTags = options.color_tags || []
+      let color = options.color || ''
+      let color_line = options.color_line || false
       let slotId = item.slotId || 1
       let ret = []
       if (imageUrl) {
@@ -106,17 +107,29 @@ export class WuCaiTemplates {
         let lineCount = 0
         lines.forEach((line: string) => {
           line = line.replace(/^\s+|\s+$/g, '')
-          if (line) {
-            if (lineCount == 0) {
-              if (colorTags && colorTags.length > 0) {
-                color = colorTags[slotId - 1]
-              }
+          if (!line || line.length <= 0) {
+            return
+          }
+          if (lineCount == 0) {
+            // first line
+            if (colorTags && colorTags.length > 0) {
+              color = colorTags[slotId - 1]
+            }
+            if (color) {
               ret.push(`${prefix}<font color="${item.color}">${color}</font>` + line)
+            } else if (color_line) {
+              ret.push(`${prefix}<font color="${item.color}">${line}</font>`)
+            } else {
+              ret.push(`${prefix}` + line)
+            }
+          } else {
+            if (color_line) {
+              ret.push(`${prefix}<font color="${item.color}">${line}</font>`)
             } else {
               ret.push(prefix + line)
             }
-            lineCount++
           }
+          lineCount++
         })
         if (anno) {
           ret.push(annoPrefix + anno)

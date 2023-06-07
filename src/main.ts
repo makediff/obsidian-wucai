@@ -335,7 +335,7 @@ export default class WuCaiPlugin extends Plugin {
         }
       }
       const pageCtx: WuCaiPageContext = {
-        title: entry.title,
+        title: WuCaiUtils.checkYAMLSyntax(entry.title),
         url: entry.url,
         wucaiurl: entry.wuCaiUrl || '',
         tags: WuCaiUtils.formatTags(entry.tags, exportCfg),
@@ -348,6 +348,7 @@ export default class WuCaiPlugin extends Plugin {
         noteid: entry.noteIdX,
         citekey: entry.citekey || '',
         author: entry.author || '',
+        diffupdateat_ts: WuCaiUtils.getDiffDay(entry.createAt, entry.updateAt),
       }
       const noteFile = await this.app.vault.getAbstractFileByPath(outFilename)
       const isNoteExists = noteFile && noteFile instanceof TFile

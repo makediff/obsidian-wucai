@@ -54,6 +54,28 @@ export class WuCaiUtils {
     return ret
   }
 
+  // 天数对比，如果updateat和createat不再同一天，则返回createat
+  static getDiffDay(createat: number, updateat: number): number {
+    if (updateat <= 0 || createat <= 0) {
+      return 0
+    }
+    const day1 = this.formatDateTime(new Date(createat * 1000), 'YYYY-MM-DD')
+    const day2 = this.formatDateTime(new Date(updateat * 1000), 'YYYY-MM-DD')
+    if (day1 !== day2) {
+      return updateat
+    }
+    return 0
+  }
+
+  // 23.6.8 https://docs.ansible.com/ansible/latest/reference_appendices/YAMLSyntax.html#gotchas
+  static checkYAMLSyntax(s: string): string {
+    s = s || s
+    if (s.length <= 0) {
+      return s
+    }
+    return s.replace(': ', '')
+  }
+
   // t1 is old file content
   // 处理目标文件
   // 基于占位符的局部更新策略

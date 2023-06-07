@@ -43,14 +43,15 @@ interface WuCaiPageContext {
   wucaiurl: string
   tags: string
   pagenote: string
-  highlights: Array<HighlightInfo>
+  highlights: Array<HighlightInfo> // @todo 需要增加中间结构
   createat: string
   updateat: string
   noteid: string
   createat_ts: number // 时间戳
-  updateat_ts: number
+  updateat_ts: number // 时间戳
   citekey: string
   author: string
+  diffupdateat_ts: number // 不在同一天的更新时间，如果是同一天则为0
 }
 
 interface HighlightInfo {
@@ -100,7 +101,7 @@ interface WuCaiPluginSettings {
   dataVersion: number // 本地数据版本号
 
   // 记录笔记对应的路径, key 是笔记id, value 是路径
-  notePaths: { [key: string]: string } 
+  notePaths: { [key: string]: string }
 }
 
 interface FilterPrettyOptions {
@@ -112,7 +113,8 @@ interface FilterPrettyOptions {
 interface FilterStyle1Options {
   prefix: string // 每行的前导符
   trim: boolean // 是否对行进行trim
-  color: string // 是否在第一行加一个颜色
   anno: string // 想法前导符
-  color_tags: Array<string>
+  color: string // 是否在第一行加一个颜色，优先级2
+  color_tags: Array<string> // 颜色优先级1
+  color_line: boolean // 是否对整行加颜色，优先级3
 }
