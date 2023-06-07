@@ -73,7 +73,7 @@ export class WuCaiUtils {
     if (s.length <= 0) {
       return s
     }
-    return s.replace(': ', '')
+    return s.replace(/(:\s+)/g, ':')
   }
 
   // t1 is old file content
