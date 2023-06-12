@@ -334,13 +334,14 @@ export default class WuCaiPlugin extends Plugin {
           }
         }
       }
+      const isHashTag = exportCfg.tagStyle === 1
       const pageCtx: WuCaiPageContext = {
-        title: WuCaiUtils.checkYAMLSyntax(entry.title),
+        title: WuCaiUtils.formatPageTitle(entry.title),
         url: entry.url,
         wucaiurl: entry.wuCaiUrl || '',
-        tags: WuCaiUtils.formatTags(entry.tags, exportCfg),
-        pagenote: entry.pageNote,
-        highlights: entry.highlights,
+        tags: WuCaiUtils.formatTags(entry.tags, isHashTag),
+        pagenote: WuCaiUtils.formatPageNote(entry.pageNote, isHashTag),
+        highlights: WuCaiUtils.formatHighlights(entry.highlights, exportCfg),
         createat: WuCaiUtils.formatTime(entry.createAt),
         createat_ts: entry.createAt,
         updateat: WuCaiUtils.formatTime(entry.updateAt),

@@ -68,7 +68,7 @@ export class WuCaiUtils {
   }
 
   // 23.6.8 https://docs.ansible.com/ansible/latest/reference_appendices/YAMLSyntax.html#gotchas
-  static checkYAMLSyntax(s: string): string {
+  static formatPageTitle(s: string): string {
     s = s || s
     if (s.length <= 0) {
       return s
@@ -188,6 +188,75 @@ export class WuCaiUtils {
     return title
   }
 
+  static isWhiteSpaceForTagParser(c: number) {
+    if (65292 == c || 12290 == c || 65307 == c || 65311 == c) {
+      return true
+    }
+    return (
+      10 == c ||
+      13 == c ||
+      (32 <= c && c <= 34) ||
+      (36 <= c && c <= 44) ||
+      46 == c ||
+      (58 <= c && c <= 63) ||
+      59 == c ||
+      64 == c ||
+      (91 <= c && c <= 94) ||
+      (123 <= c && c <= 126) ||
+      65292 == c
+    )
+  }
+
+  static convertHashTagToDoubleLink(cnt: string): string {
+    cnt = cnt || ''
+    if (cnt.length <= 0) {
+      return cnt
+    }
+    if (cnt.indexOf('#') < 0) {
+      return cnt
+    }
+    const cntLength = cnt.length
+    let left = -1
+    const lastL = cntLength - 1
+    const tagsPosi = []
+    for (let i = 0; i < cntLength; i++) {
+      const cCode = cnt.charCodeAt(i)
+      const isLast = i == lastL
+      const isWhiteS = this.isWhiteSpaceForTagParser(cCode)
+      const il = i - left
+      if (35 === cCode) {
+        if (left > -1 && il > 1) {
+          tagsPosi.push([left, i])
+        }
+        left = i
+      } else if (left > -1 && (isWhiteS || isLast) && il >= 1) {
+        if (isLast && !isWhiteS && il >= 1) {
+          tagsPosi.push([left, i + 1])
+        } else if (il > 1) {
+          tagsPosi.push([left, i])
+        }
+        left = -1
+      }
+    }
+    if (tagsPosi.length <= 0) {
+      return cnt
+    }
+    // 开始拼接
+    const ret = []
+    let offsetStart = 0
+    for (let i = 0; i < tagsPosi.length; i++) {
+      const posi = tagsPosi[i]
+      const s = posi[0]
+      const e = posi[1]
+      if (s - offsetStart > 0) {
+        ret.push(cnt.substring(offsetStart, s))
+      }
+      ret.push('[[' + cnt.substring(s + 1, e) + ']]')
+      offsetStart = e
+    }
+    return ret.join('')
+  }
+
   // // 处理老的配置是基于数值而非模板
   // static getTitleTemplateByStyle(titleFormat: number): string {
   //   let titleTpl = ''
@@ -237,11 +306,31 @@ export class WuCaiUtils {
     return this.formatDateTime(d1, 'YYYY-MM-DD HH:mm')
   }
 
+  static formatPageNote(note: string, isHashTag: boolean): string {
+    if (isHashTag) {
+      return note || ''
+    }
+    return this.convertHashTagToDoubleLink(note) || ''
+  }
+
+  static formatHighlights(highlights: Array<HighlightInfo>, exportCfg: WuCaiExportConfig): Array<HighlightInfo> {
+    const isHashTag = exportCfg.tagStyle === 1
+    if (isHashTag || !highlights || highlights.length <= 0) {
+      return highlights
+    }
+    for (let i = 0; i < highlights.length; i++) {
+      const highlight = highlights[i]
+      if (highlight && highlight.annonation && highlight.annonation.length > 0) {
+        highlight.annonation = this.convertHashTagToDoubleLink(highlight.annonation)
+      }
+    }
+    return highlights
+  }
+
   // 根据配置生成 tag 列表
-  static formatTags(tags: Array<string>, exportCfg: WuCaiExportConfig): string {
+  static formatTags(tags: Array<string>, isHashTag: boolean): string {
     let ret: Array<string> = []
     tags = tags || []
-    const isNeedHashTag = exportCfg.tagStyle === 1
     tags.forEach((tag) => {
       tag = tag.trim()
       if (!tag || tag.length <= 0) {
@@ -249,9 +338,9 @@ export class WuCaiUtils {
       }
       let isHash = tag[0] === '#'
       let isInner = tag[0] === '['
-      if (isHash && isNeedHashTag) {
+      if (isHash && isHashTag) {
         ret.push(tag)
-      } else if (isInner && !isNeedHashTag) {
+      } else if (isInner && !isHashTag) {
         ret.push(tag)
       } else {
         // 转换
@@ -262,7 +351,7 @@ export class WuCaiUtils {
           coreTag = tag.substring(2, tag.length - 2).trim()
         }
         if (coreTag.length > 0) {
-          if (isNeedHashTag) {
+          if (isHashTag) {
             ret.push('#' + coreTag)
           } else {
             ret.push(`[[${coreTag}]]`)
