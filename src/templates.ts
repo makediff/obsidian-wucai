@@ -131,12 +131,12 @@ export class WuCaiTemplates {
           }
           lineCount++
         })
-        if (anno) {
-          ret.push(annoPrefix + anno)
-        }
-        if (ret.length > 0) {
-          ret.push('')
-        }
+      }
+      if (anno) {
+        ret.push(annoPrefix + anno)
+      }
+      if (ret.length > 0) {
+        ret.push('')
       }
       return ret.join('\n')
     })

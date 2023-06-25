@@ -341,6 +341,7 @@ export default class WuCaiPlugin extends Plugin {
         wucaiurl: entry.wuCaiUrl || '',
         tags: WuCaiUtils.formatTags(entry.tags, isHashTag),
         pagenote: WuCaiUtils.formatPageNote(entry.pageNote, isHashTag),
+        pagescore: entry.pageScore || 0,
         highlights: WuCaiUtils.formatHighlights(entry.highlights, exportCfg),
         createat: WuCaiUtils.formatTime(entry.createAt),
         createat_ts: entry.createAt,

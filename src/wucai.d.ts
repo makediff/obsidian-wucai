@@ -43,6 +43,7 @@ interface WuCaiPageContext {
   wucaiurl: string
   tags: string
   pagenote: string
+  pagescore: number
   highlights: Array<HighlightInfo> // @todo 需要增加中间结构
   createat: string
   updateat: string
@@ -72,11 +73,11 @@ interface NoteEntry {
   createAt: number
   updateAt: number
   pageNote: string
-  category: string
-  tags: Array<string>
-  highlights: Array<HighlightInfo>
+  pageScore: number
   citekey: string
   author: string
+  tags: Array<string>
+  highlights: Array<HighlightInfo>
 }
 
 interface NoteIdInfo {

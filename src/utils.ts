@@ -207,7 +207,7 @@ export class WuCaiUtils {
     )
   }
 
-  static convertHashTagToDoubleLink(cnt: string): string {
+  static convertHashTagToBackLink(cnt: string): string {
     cnt = cnt || ''
     if (cnt.length <= 0) {
       return cnt
@@ -241,11 +241,9 @@ export class WuCaiUtils {
     if (tagsPosi.length <= 0) {
       return cnt
     }
-    // 开始拼接
     const ret = []
     let offsetStart = 0
-    for (let i = 0; i < tagsPosi.length; i++) {
-      const posi = tagsPosi[i]
+    for (const posi of tagsPosi) {
       const s = posi[0]
       const e = posi[1]
       if (s - offsetStart > 0) {
@@ -253,6 +251,9 @@ export class WuCaiUtils {
       }
       ret.push('[[' + cnt.substring(s + 1, e) + ']]')
       offsetStart = e
+    }
+    if (offsetStart > 0 && offsetStart < cnt.length) {
+      ret.push(cnt.substring(offsetStart, cnt.length))
     }
     return ret.join('')
   }
@@ -310,7 +311,7 @@ export class WuCaiUtils {
     if (isHashTag) {
       return note || ''
     }
-    return this.convertHashTagToDoubleLink(note) || ''
+    return this.convertHashTagToBackLink(note) || ''
   }
 
   static formatHighlights(highlights: Array<HighlightInfo>, exportCfg: WuCaiExportConfig): Array<HighlightInfo> {
@@ -321,7 +322,7 @@ export class WuCaiUtils {
     for (let i = 0; i < highlights.length; i++) {
       const highlight = highlights[i]
       if (highlight && highlight.annonation && highlight.annonation.length > 0) {
-        highlight.annonation = this.convertHashTagToDoubleLink(highlight.annonation)
+        highlight.annonation = this.convertHashTagToBackLink(highlight.annonation)
       }
     }
     return highlights
