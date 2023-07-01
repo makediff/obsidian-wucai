@@ -416,13 +416,6 @@ export class WuCaiUtils {
     if (!ux) {
       return ''
     }
-    let hostx = ux.host.toLocaleLowerCase()
-    let hostArr = hostx.split('.')
-    // 只取最后两位
-    const hostLen = hostArr.length
-    if (hostLen <= 2) {
-      return hostx
-    }
-    return `${hostArr[hostLen - 2]}.${hostArr[hostLen - 1]}`
+    return ux.hostname.toLocaleLowerCase()
   }
 }

@@ -286,11 +286,32 @@ export default class WuCaiPlugin extends Plugin {
     let filename: string
     if (WuCaiTemplates.isNeedRender(titleTpl)) {
       const titleTemplate = this.pageTemplate.getTitleTemplateByStr(titleTpl)
-      filename = titleTemplate.render({
+      const nameParams = {
         title: WuCaiUtils.normalTitle(entry.title),
         createat_ts: entry.createAt,
-        domain: WuCaiUtils.getDomainByUrl(entry.url),
-      })
+        domain2: '', // 仅保留2级的域名
+        domain: '', // 当前url的域名
+      }
+      // 是否需要解析domain变量
+      if (titleTpl.indexOf('domain') >= 0) {
+        nameParams.domain = WuCaiUtils.getDomainByUrl(entry.url)
+        if (nameParams.domain) {
+          let hostArr = nameParams.domain.split('.')
+          const hostLen = hostArr.length
+          if (hostLen <= 2) {
+            nameParams.domain2 = nameParams.domain
+          } else {
+            nameParams.domain2 = `${hostArr[hostLen - 2]}.${hostArr[hostLen - 1]}`
+          }
+        }
+        if (nameParams.domain.length <= 0) {
+          nameParams.domain = 'NoDomain'
+        }
+        if (nameParams.domain2.length <= 0) {
+          nameParams.domain2 = 'NoDomain'
+        }
+      }
+      filename = titleTemplate.render(nameParams)
     } else {
       filename = titleTpl
     }
