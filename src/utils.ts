@@ -406,4 +406,23 @@ export class WuCaiUtils {
     }
     return p.substring(0, idx)
   }
+
+  // 返回一个连接的 domain
+  static getDomainByUrl(s: string): string {
+    if (!s) {
+      return ''
+    }
+    let ux = new URL(s)
+    if (!ux) {
+      return ''
+    }
+    let hostx = ux.host.toLocaleLowerCase()
+    let hostArr = hostx.split('.')
+    // 只取最后两位
+    const hostLen = hostArr.length
+    if (hostLen <= 2) {
+      return hostx
+    }
+    return `${hostArr[hostLen - 2]}.${hostArr[hostLen - 1]}`
+  }
 }

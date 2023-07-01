@@ -289,6 +289,7 @@ export default class WuCaiPlugin extends Plugin {
       filename = titleTemplate.render({
         title: WuCaiUtils.normalTitle(entry.title),
         createat_ts: entry.createAt,
+        domain: WuCaiUtils.getDomainByUrl(entry.url),
       })
     } else {
       filename = titleTpl
