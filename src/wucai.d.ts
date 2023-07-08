@@ -37,14 +37,15 @@ interface WuCaiBlocks {
   highlights: string
 }
 
+// 模板里可以使用的变量
 interface WuCaiPageContext {
   title: string
-  url: string
-  wucaiurl: string
+  url: string // 原链接
+  wucaiurl: string // 五彩后台链接
+  readurl: string //全文剪藏链接
   tags: string
   pagenote: string
-  pagescore: number
-  highlights: Array<HighlightInfo> // @todo 需要增加中间结构
+  pagescore: number // 星标
   createat: string
   updateat: string
   noteid: string
@@ -53,23 +54,28 @@ interface WuCaiPageContext {
   citekey: string
   author: string
   diffupdateat_ts: number // 不在同一天的更新时间，如果是同一天则为0
+  domain: string
+  highlights: Array<HighlightInfo> // @todo 需要增加中间结构
 }
 
 interface HighlightInfo {
-  note: string
-  imageUrl: string
-  updateAt: number
-  annonation: string
-  color: string
-  slotId: number
+  note: string // 文字划线
+  imageUrl: string // 图片划线
+  updateAt: number // 更新时间
+  annonation: string // 划线的想法
+  color: string // 颜色
+  slotId: number // 颜色id
+  refid: string // 划线id
+  url: string // 跳转原文url
 }
 
 interface NoteEntry {
   title: string
   url: string
+  wucaiurl: string
+  readurl: string
   noteIdX: string
   noteId: number
-  wuCaiUrl: string
   createAt: number
   updateAt: number
   pageNote: string

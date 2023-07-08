@@ -284,6 +284,7 @@ export default class WuCaiPlugin extends Plugin {
   // 遍历页面并生成文件
   async processEntity(entry: NoteEntry, titleTpl: string) {
     let filename: string
+    let urldomain: string = WuCaiUtils.getDomainByUrl(entry.url)
     if (WuCaiTemplates.isNeedRender(titleTpl)) {
       const titleTemplate = this.pageTemplate.getTitleTemplateByStr(titleTpl)
       const nameParams = {
@@ -294,7 +295,7 @@ export default class WuCaiPlugin extends Plugin {
       }
       // 是否需要解析domain变量
       if (titleTpl.indexOf('domain') >= 0) {
-        nameParams.domain = WuCaiUtils.getDomainByUrl(entry.url)
+        nameParams.domain = urldomain
         if (nameParams.domain) {
           let hostArr = nameParams.domain.split('.')
           const hostLen = hostArr.length
@@ -360,7 +361,8 @@ export default class WuCaiPlugin extends Plugin {
       const pageCtx: WuCaiPageContext = {
         title: WuCaiUtils.formatPageTitle(entry.title),
         url: entry.url,
-        wucaiurl: entry.wuCaiUrl || '',
+        wucaiurl: entry.wucaiurl || '',
+        readurl: entry.readurl || '',
         tags: WuCaiUtils.formatTags(entry.tags, isHashTag),
         pagenote: WuCaiUtils.formatPageNote(entry.pageNote, isHashTag),
         pagescore: entry.pageScore || 0,
@@ -373,6 +375,7 @@ export default class WuCaiPlugin extends Plugin {
         citekey: entry.citekey || '',
         author: entry.author || '',
         diffupdateat_ts: WuCaiUtils.getDiffDay(entry.createAt, entry.updateAt),
+        domain: urldomain,
       }
       const noteFile = await this.app.vault.getAbstractFileByPath(outFilename)
       const isNoteExists = noteFile && noteFile instanceof TFile
