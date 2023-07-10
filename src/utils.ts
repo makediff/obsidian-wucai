@@ -418,4 +418,16 @@ export class WuCaiUtils {
     }
     return ux.hostname.toLocaleLowerCase()
   }
+
+  static getDomain2ByDomain(urlDomain: string): string {
+    if (!urlDomain || urlDomain.length <= 0) {
+      return ''
+    }
+    let hostArr = urlDomain.split('.')
+    const hostLen = hostArr.length
+    if (hostLen <= 2) {
+      return urlDomain
+    }
+    return `${hostArr[hostLen - 2]}.${hostArr[hostLen - 1]}`
+  }
 }

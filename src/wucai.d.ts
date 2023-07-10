@@ -55,6 +55,7 @@ interface WuCaiPageContext {
   author: string
   diffupdateat_ts: number // 不在同一天的更新时间，如果是同一天则为0
   domain: string
+  domain2: string
   highlights: Array<HighlightInfo> // @todo 需要增加中间结构
 }
 

@@ -285,32 +285,14 @@ export default class WuCaiPlugin extends Plugin {
   async processEntity(entry: NoteEntry, titleTpl: string) {
     let filename: string
     let urldomain: string = WuCaiUtils.getDomainByUrl(entry.url)
+    let urldomain2: string = WuCaiUtils.getDomain2ByDomain(urldomain)
     if (WuCaiTemplates.isNeedRender(titleTpl)) {
       const titleTemplate = this.pageTemplate.getTitleTemplateByStr(titleTpl)
       const nameParams = {
         title: WuCaiUtils.normalTitle(entry.title),
         createat_ts: entry.createAt,
-        domain2: '', // 仅保留2级的域名
-        domain: '', // 当前url的域名
-      }
-      // 是否需要解析domain变量
-      if (titleTpl.indexOf('domain') >= 0) {
-        nameParams.domain = urldomain
-        if (nameParams.domain) {
-          let hostArr = nameParams.domain.split('.')
-          const hostLen = hostArr.length
-          if (hostLen <= 2) {
-            nameParams.domain2 = nameParams.domain
-          } else {
-            nameParams.domain2 = `${hostArr[hostLen - 2]}.${hostArr[hostLen - 1]}`
-          }
-        }
-        if (nameParams.domain.length <= 0) {
-          nameParams.domain = 'NoDomain'
-        }
-        if (nameParams.domain2.length <= 0) {
-          nameParams.domain2 = 'NoDomain'
-        }
+        domain2: urldomain2 || '', // 仅保留2级的域名
+        domain: urldomain || '', // 当前url的域名
       }
       filename = titleTemplate.render(nameParams)
     } else {
@@ -376,6 +358,7 @@ export default class WuCaiPlugin extends Plugin {
         author: entry.author || '',
         diffupdateat_ts: WuCaiUtils.getDiffDay(entry.createAt, entry.updateAt),
         domain: urldomain,
+        domain2: urldomain2,
       }
       const noteFile = await this.app.vault.getAbstractFileByPath(outFilename)
       const isNoteExists = noteFile && noteFile instanceof TFile
