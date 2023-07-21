@@ -730,9 +730,14 @@ export default class WuCaiPlugin extends Plugin {
     await this.saveData(this.settings)
   }
 
+  resetObsidianClientID() {
+    window.localStorage.setItem('wc-ObsidianClientId', '')
+    return this.getObsidianClientID()
+  }
+
   getObsidianClientID() {
-    let tmpId = window.localStorage.getItem('wc-ObsidianClientId')
-    if (tmpId) {
+    let tmpId = window.localStorage.getItem('wc-ObsidianClientId') || ''
+    if (tmpId && tmpId.length > 0) {
       return tmpId
     }
     tmpId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
@@ -785,12 +790,13 @@ class WuCaiSettingTab extends PluginSettingTab {
   }
 
   display(): void {
+    let clientId = this.plugin.getObsidianClientID() || ''
     let { containerEl } = this
     containerEl.empty()
     containerEl.createEl('h1', { text: 'WuCai Highlights Official' })
     containerEl
       .createEl('p', { text: 'Created by ' })
-      .createEl('a', { text: '希果壳五彩插件', href: 'https://www.dotalk.cn/product/wucai' })
+      .createEl('a', { text: '希果壳五彩', href: 'https://www.dotalk.cn/product/wucai' })
     containerEl.getElementsByTagName('p')[0].appendText(` Version ${BGCONSTS.VERSION}`)
     containerEl.createEl('h2', { text: 'Settings' })
 
@@ -887,7 +893,6 @@ class WuCaiSettingTab extends PluginSettingTab {
       //       }
       //     })
       //   })
-
       if (this.plugin.settings.lastSyncFailed) {
         this.plugin.showInfoStatus(
           containerEl.find('.wc-setting-sync .wc-info-container').parentElement,
@@ -896,7 +901,7 @@ class WuCaiSettingTab extends PluginSettingTab {
         )
       }
     } else {
-      // 没有配置 token 的情况
+      clientId = this.plugin.resetObsidianClientID()
       new Setting(containerEl)
         .setName('Connect Obsidian to WuCai')
         .setClass('wc-setting-connect')
@@ -916,6 +921,9 @@ class WuCaiSettingTab extends PluginSettingTab {
       containerEl.find('.wc-setting-connect > .setting-item-control ').prepend(el)
     }
     const help = containerEl.createEl('p')
-    help.innerHTML = "Question? Please see our <a href='https://www.dotalk.cn/s/M7'>feedback</a> 🙂"
+    help.innerHTML =
+      "Question? Please see our <a href='https://www.dotalk.cn/s/M7'>feedback</a><br/> Client id is: <b>" +
+      clientId +
+      '</b>'
   }
 }
