@@ -921,9 +921,6 @@ class WuCaiSettingTab extends PluginSettingTab {
       containerEl.find('.wc-setting-connect > .setting-item-control ').prepend(el)
     }
     const help = containerEl.createEl('p')
-    help.innerHTML =
-      "Question? Please see our <a href='https://www.dotalk.cn/s/M7'>feedback</a><br/> Client id is: <b>" +
-      clientId +
-      '</b>'
+    help.innerHTML = "Question? Please see our <a href='https://www.dotalk.cn/s/M7'>feedback</a>"
   }
 }
