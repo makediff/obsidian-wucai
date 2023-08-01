@@ -340,6 +340,11 @@ export default class WuCaiPlugin extends Plugin {
         }
       }
       const isHashTag = exportCfg.tagStyle === 1
+      let highlightcount = 0
+      if (entry.highlights) {
+        highlightcount = entry.highlights.length
+      }
+      const isstar = entry.pageScore && entry.pageScore > 0
       const pageCtx: WuCaiPageContext = {
         title: WuCaiUtils.formatPageTitle(entry.title),
         url: entry.url,
@@ -348,7 +353,9 @@ export default class WuCaiPlugin extends Plugin {
         tags: WuCaiUtils.formatTags(entry.tags, isHashTag),
         pagenote: WuCaiUtils.formatPageNote(entry.pageNote, isHashTag),
         pagescore: entry.pageScore || 0,
+        isstar,
         highlights: WuCaiUtils.formatHighlights(entry.highlights, exportCfg),
+        highlightcount,
         createat: WuCaiUtils.formatTime(entry.createAt),
         createat_ts: entry.createAt,
         updateat: WuCaiUtils.formatTime(entry.updateAt),

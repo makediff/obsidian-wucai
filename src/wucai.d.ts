@@ -46,6 +46,7 @@ interface WuCaiPageContext {
   tags: string
   pagenote: string
   pagescore: number // 星标
+  isstar: boolean //是否星标
   createat: string
   updateat: string
   noteid: string
@@ -57,6 +58,7 @@ interface WuCaiPageContext {
   domain: string
   domain2: string
   highlights: Array<HighlightInfo> // @todo 需要增加中间结构
+  highlightcount: number // 划线数量
 }
 
 interface HighlightInfo {

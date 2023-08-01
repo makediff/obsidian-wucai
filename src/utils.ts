@@ -430,4 +430,20 @@ export class WuCaiUtils {
     }
     return `${hostArr[hostLen - 2]}.${hostArr[hostLen - 1]}`
   }
+
+  static detectIsMardownFormat(s: string): boolean {
+    // 检测是否是 markdown 里的某些格式，比如 todo, list， tag， backlink, 这些需要保留原来的格式
+    if (!s || s.length <= 0) {
+      return false
+    }
+    // is a todo item, and not contains new line
+    if (/^- \[[ x]\] +/.test(s) && s.indexOf('\n') < 0) {
+      return true
+    }
+    // is a block
+    if (/^\`\`\`/.test(s) && /\`\`\`\s*$/.test(s)) {
+      return true
+    }
+    return false
+  }
 }

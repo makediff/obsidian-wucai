@@ -90,50 +90,53 @@ export class WuCaiTemplates {
     // 默认样式1
     this.templateEnv.addFilter('style1', function (item: HighlightInfo, options: FilterStyle1Options) {
       options = options || ({} as FilterStyle1Options)
-      let imageUrl = item.imageUrl
-      let note = item.note || ''
-      let anno = item.annonation || ''
-      let prefix = options.prefix || ''
-      let annoPrefix = options.anno || ''
+      let imageUrl = item.imageUrl || ''
+      let note = item.note || '' // 划线
+      let notePrefix = options.prefix || '' // 划线前缀
+      let anno = item.annonation || '' // 想法
+      let annoPrefix = options.anno || '' // 想法的前缀
       let colorTags = options.color_tags || []
-      let color = options.color || ''
-      let color_line = options.color_line || false
+      let color = options.color || '' // 颜色占位符
+      let colorLine = options.color_line || false // 是否需要对整行加颜色
       let slotId = item.slotId || 1
       let ret = []
       if (imageUrl) {
-        ret.push(`${prefix}![](${imageUrl})`)
+        ret.push(`${notePrefix}![](${imageUrl})`)
+      } else if (WuCaiUtils.detectIsMardownFormat(note)) {
+        // current highlight is a markdown format content, present it
+        ret.push(note)
       } else {
         let lines = note.split(/\n/)
         let lineCount = 0
-        lines.forEach((line: string) => {
+        for (let line of lines) {
           line = line.replace(/^\s+|\s+$/g, '')
           if (!line || line.length <= 0) {
-            return
+            continue
           }
-          if (lineCount == 0) {
-            // first line
-            if (colorTags && colorTags.length > 0) {
-              color = colorTags[slotId - 1]
-            }
-            if (color) {
-              ret.push(`${prefix}<font color="${item.color}">${color}</font>` + line)
-            } else if (color_line) {
-              ret.push(`${prefix}<font color="${item.color}">${line}</font>`)
-            } else {
-              ret.push(`${prefix}` + line)
-            }
+          if (lineCount == 0 && colorTags && colorTags.length > 0) {
+            color = colorTags[slotId - 1]
+          }
+          if (color && lineCount == 0) {
+            // only add color block to head of first line
+            ret.push(`${notePrefix}<font color="${item.color}">${color}</font>` + line)
+          } else if (colorLine) {
+            ret.push(`${notePrefix}<font color="${item.color}">${line}</font>`)
           } else {
-            if (color_line) {
-              ret.push(`${prefix}<font color="${item.color}">${line}</font>`)
-            } else {
-              ret.push(prefix + line)
-            }
+            ret.push(`${notePrefix}` + line)
           }
           lineCount++
-        })
+        }
       }
       if (anno) {
-        ret.push(annoPrefix + anno)
+        // 23.8.1 如果想法是一个标签，自动加个空格
+        if (WuCaiUtils.detectIsMardownFormat(anno)) {
+          ret.push(anno)
+        } else {
+          if (annoPrefix.length > 0 && /^#/.test(anno)) {
+            annoPrefix += ' '
+          }
+          ret.push(annoPrefix + anno)
+        }
       }
       if (ret.length > 0) {
         ret.push('')
