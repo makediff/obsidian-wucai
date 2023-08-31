@@ -14,12 +14,14 @@ export class WuCaiUtils {
   static blocksRegExpMap: { [key: string]: RegExp } = {
     highlights: new RegExp('\\{%\\s*block\\s+highlights\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}', 'img'),
     pagenote: new RegExp('\\{%\\s*block\\s+pagenote\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}', 'img'),
+    mdcontent: new RegExp('\\{%\\s*block\\s+mdcontent\\s*%\\}[\\s\\S]*?\\{%\\s*endblock\\s*%\\}', 'img'),
   }
 
   // 从目标文件提取占位符
   static holdersRegExpMap: { [key: string]: RegExp } = {
     highlights: new RegExp('(%%\\s*begin\\s+highlights\\s*%%([\\s\\S]*?)%%\\s*end\\s+highlights\\s*%%)', 'ig'),
     pagenote: new RegExp('(%%\\s*begin\\s+pagenote\\s*%%([\\s\\S]*?)%%\\s*end\\s+pagenote\\s*%%)', 'ig'),
+    mdcontent: new RegExp('(%%\\s*begin\\s+mdcontent\\s*%%([\\s\\S]*?)%%\\s*end\\s+mdcontent\\s*%%)', 'ig'),
   }
 
   // 从 t1 模板里，找出需要的 block 和其对应的模板代码
@@ -29,6 +31,7 @@ export class WuCaiUtils {
     let ret: WuCaiBlocks = {
       highlights: '',
       pagenote: '',
+      mdcontent: '',
     }
     if (!matchRet) {
       // console.log({ msg: 'get blocks', t1, exp: this.fetchBlocksRegExp })
@@ -45,6 +48,11 @@ export class WuCaiUtils {
         case 'highlights':
           if (ret.highlights.length <= 0) {
             ret.highlights = match[0] || ''
+          }
+          break
+        case 'mdcontent':
+          if (ret.mdcontent.length <= 0) {
+            ret.mdcontent = match[0] || ''
           }
           break
         default:
@@ -314,18 +322,37 @@ export class WuCaiUtils {
     return this.convertHashTagToBackLink(note) || ''
   }
 
-  static formatHighlights(highlights: Array<HighlightInfo>, exportCfg: WuCaiExportConfig): Array<HighlightInfo> {
+  static formatHighlights(
+    entryUrl: string,
+    highlights: Array<HighlightInfo>,
+    exportCfg: WuCaiExportConfig
+  ): Array<HighlightInfo> {
     const isHashTag = exportCfg.tagStyle === 1
-    if (isHashTag || !highlights || highlights.length <= 0) {
+    if (!highlights || highlights.length <= 0) {
       return highlights
     }
     for (let i = 0; i < highlights.length; i++) {
-      const highlight = highlights[i]
-      if (highlight && highlight.annonation && highlight.annonation.length > 0) {
+      let highlight = highlights[i]
+      if (!highlight) {
+        continue
+      }
+      if (!isHashTag && highlight.annonation && highlight.annonation.length > 0) {
         highlight.annonation = this.convertHashTagToBackLink(highlight.annonation)
+      }
+      if (entryUrl && highlight.refurl) {
+        highlight.refurl = WuCaiUtils.getHighlightUrl(entryUrl, highlight.refurl)
       }
     }
     return highlights
+  }
+
+  // for Obsidian frontmatter
+  static trimTags(tags: Array<string>): string {
+    if (!tags || tags.length <= 0) {
+      return ''
+    }
+    let strTags = tags.join(',')
+    return strTags.replace(/[#\[\]]/g, '')
   }
 
   // 根据配置生成 tag 列表
@@ -392,6 +419,12 @@ export class WuCaiUtils {
         renderHolders['highlights'] = lights
       }
     }
+    if (wucaiTemplate.blocks.mdcontent) {
+      let mdcontent = wucaiTemplate.mdcontentEngine.render(pageCtx)
+      if (mdcontent) {
+        renderHolders['mdcontent'] = mdcontent
+      }
+    }
     // 2) 将 block 结果追加到指定占位符
     return this.replaceHolders(oldCnt, renderHolders)
   }
@@ -445,5 +478,65 @@ export class WuCaiUtils {
       return true
     }
     return false
+  }
+
+  static getNoteIdxFromFilePath(fn: string): string {
+    if (!fn || fn.length <= 0) {
+      return ''
+    }
+    if (!/-([a-z0-9_]+)\.md$/i.test(fn)) {
+      return ''
+    }
+    const idx = fn.lastIndexOf('-')
+    if (idx < 0) {
+      return ''
+    }
+    return fn.substring(idx + 1, fn.length - 3)
+  }
+
+  static getHighlightUrl(entryUrl: string, refurl: string): string {
+    if (!entryUrl || entryUrl.length <= 0) {
+      return ''
+    }
+    if (!refurl || refurl.length <= 0) {
+      return ''
+    }
+    let idx = entryUrl.indexOf('#')
+    if (idx >= 0) {
+      entryUrl = entryUrl.substring(0, idx)
+    }
+    return entryUrl + refurl
+  }
+
+  static async getPageMirrorMarkdown(urlx: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (!urlx || urlx.length <= 0) {
+        resolve('')
+        return
+      }
+      fetch(urlx, { method: 'GET' })
+        .then((rsp) => {
+          if (rsp.ok) {
+            return rsp.text()
+          } else {
+            return ''
+          }
+        })
+        .then((rsptext) => {
+          if (!rsptext || rsptext.length <= 0) {
+            return ''
+          }
+          let idx = rsptext.indexOf(':')
+          if (idx <= 0) {
+            resolve('')
+            return
+          }
+          let b = parseInt(rsptext.substring(0, idx))
+          resolve(rsptext.substring(b + idx + 1))
+        })
+        .catch((rsp) => {
+          resolve('')
+        })
+    })
   }
 }

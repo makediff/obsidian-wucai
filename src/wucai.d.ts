@@ -15,6 +15,7 @@ interface WuCaiExportConfig {
   annotationStyle: number
   tagStyle: number
   obTemplate: string
+  pageMirrorStyle: number
 }
 
 // 初始化接口返回的字段
@@ -24,6 +25,7 @@ interface ExportInitRequestResponse {
   totalNotes: number
   notesExported: number
   taskStatus: string
+  downloadEP: string
 }
 
 interface ExportDownloadResponse {
@@ -35,6 +37,7 @@ interface ExportDownloadResponse {
 interface WuCaiBlocks {
   pagenote: string
   highlights: string
+  mdcontent: string
 }
 
 // 模板里可以使用的变量
@@ -43,7 +46,8 @@ interface WuCaiPageContext {
   url: string // 原链接
   wucaiurl: string // 五彩后台链接
   readurl: string //全文剪藏链接
-  tags: string
+  tags: string // 包含前缀的标签，如 #read
+  trimtags: string // 去掉前缀的标签
   pagenote: string
   pagescore: number // 星标
   isstar: boolean //是否星标
@@ -59,6 +63,7 @@ interface WuCaiPageContext {
   domain2: string
   highlights: Array<HighlightInfo> // @todo 需要增加中间结构
   highlightcount: number // 划线数量
+  mdcontent: string // 剪藏的markdown
 }
 
 interface HighlightInfo {
@@ -69,6 +74,7 @@ interface HighlightInfo {
   color: string // 颜色
   slotId: number // 颜色id
   refid: string // 划线id
+  refurl: string // 划线跳转链接
   url: string // 跳转原文url
 }
 
@@ -77,6 +83,7 @@ interface NoteEntry {
   url: string
   wucaiurl: string
   readurl: string
+  sou: string
   noteIdX: string
   noteId: number
   createAt: number
@@ -105,6 +112,7 @@ interface WuCaiPluginSettings {
 
   lastCursor: string
   exportConfig: WuCaiExportConfig
+  downloadEP: string
 
   refreshNotes: boolean
   notesToRefresh: Array<string> // 更新出现异常的noteidx

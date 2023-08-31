@@ -18,6 +18,7 @@ export class WuCaiTemplates {
   // 提前编译好的 template
   pagenoteEngine: nunjucks.Template
   highlightsEngine: nunjucks.Template
+  mdcontentEngine: nunjucks.Template
   pageEngine: nunjucks.Template
 
   cachedTitleTemplates: { [key: string]: nunjucks.Template }
@@ -161,6 +162,9 @@ export class WuCaiTemplates {
     if (blocks.highlights) {
       renderHolders['highlights'] = WuCaiUtils.wrapBlock(blocks.highlights, 'highlights')
     }
+    if (blocks.mdcontent) {
+      renderHolders['mdcontent'] = WuCaiUtils.wrapBlock(blocks.mdcontent, 'mdcontent')
+    }
 
     // 提前将 template 编译好
     let pageStrWithHolder = WuCaiUtils.replaceBlocks(pageStr, renderHolders)
@@ -169,6 +173,7 @@ export class WuCaiTemplates {
     // 局部模板(不带有占位符)
     this.pagenoteEngine = nunjucks.compile(blocks.pagenote, this.templateEnv)
     this.highlightsEngine = nunjucks.compile(blocks.highlights, this.templateEnv)
+    this.mdcontentEngine = nunjucks.compile(blocks.mdcontent, this.templateEnv)
 
     this.pageTemplateStr = pageStr
     this.blocks = blocks

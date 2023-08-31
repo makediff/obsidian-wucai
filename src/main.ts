@@ -26,6 +26,8 @@ const SUCCESS_STATUSES = ['SYNCING']
 const API_URL_INIT = '/apix/openapi/wucai/sync/init'
 const API_URL_DOWNLOAD = '/apix/openapi/wucai/sync/download'
 const API_URL_ACK = '/apix/openapi/wucai/sync/ack'
+const API_URL_DELETE_SERVER_NOTE = '/apix/openapi/wucai/sync/delete'
+const API_URL_ARCHIVE_NOTE = '/apix/openapi/wucai/sync/archive'
 
 const WRITE_STYLE_OVERWRITE = 1
 const WRITE_STYLE_APPEND = 2
@@ -43,8 +45,10 @@ const DEFAULT_SETTINGS: WuCaiPluginSettings = {
   reimportShowConfirmation: true,
   lastCursor: '',
   dataVersion: 0,
+  downloadEP: '',
   notePaths: {},
   exportConfig: {
+    pageMirrorStyle: 2,
     writeStyle: 2,
     highlightStyle: 1,
     annotationStyle: 1,
@@ -86,6 +90,7 @@ export default class WuCaiPlugin extends Plugin {
   pageTemplate: WuCaiTemplates // 渲染模板
 
   // 对接口返回的内容进行检查
+  // 如果有错误返回 true, 否则返回 false
   checkResponseBody(buttonContext: ButtonComponent, rsp: any): boolean {
     if (!rsp) {
       return false
@@ -158,7 +163,13 @@ export default class WuCaiPlugin extends Plugin {
     params['v'] = BGCONSTS.VERSION_NUM
     params['serviceId'] = BGCONSTS.SERVICE_ID
     url += `?appid=${BGCONSTS.APPID}&ep=${BGCONSTS.ENDPOINT}&version=${BGCONSTS.VERSION}&reqtime=${reqtime}`
-    return fetch(BGCONSTS.BASE_URL + url, {
+    let lastUrl
+    if (url[0] == '/') {
+      lastUrl = BGCONSTS.BASE_URL + url
+    } else {
+      lastUrl = url
+    }
+    return fetch(lastUrl, {
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' },
       method: 'POST',
       body: JSON.stringify(params),
@@ -170,7 +181,6 @@ export default class WuCaiPlugin extends Plugin {
     const dirInfo = this.app.vault.getAbstractFileByPath(this.settings.wuCaiDir)
     const isDirDeleted = !dirInfo || !(dirInfo instanceof TFolder)
     if (isDirDeleted) {
-      // 如果文件夹被删除，则重新同步
       this.settings.lastCursor = ''
       this.settings.notesToRefresh = []
       this.settings.notePaths = {}
@@ -198,11 +208,12 @@ export default class WuCaiPlugin extends Plugin {
     let initRet: ExportInitRequestResponse = data2['data'] || {}
     logger({ msg: 'in exportInit', initRet, lastCursor: this.settings.lastCursor, flagx })
 
-    // 每次都使用最新的配置，并行重新预编译模板
     this.settings.exportConfig = initRet.exportConfig
+    this.settings.downloadEP = initRet.downloadEP || ''
+
+    // 每次都使用最新的配置，重新预编译模板
     const compileErrMessage = this.pageTemplate.precompile(initRet.exportConfig.obTemplate)
 
-    // 处理同步点位
     let tmpCursor = this.getLastCursor(initRet.lastCursor2, this.settings.lastCursor)
     if (tmpCursor) {
       this.settings.lastCursor = tmpCursor
@@ -345,16 +356,23 @@ export default class WuCaiPlugin extends Plugin {
         highlightcount = entry.highlights.length
       }
       const isstar = entry.pageScore && entry.pageScore > 0
+      const tags = WuCaiUtils.formatTags(entry.tags, isHashTag)
+      const trimtags = WuCaiUtils.trimTags(entry.tags)
+      let mdcontent = ''
+      if (exportCfg.pageMirrorStyle !== 2 && entry.sou && entry.sou.length > 0) {
+        mdcontent = await WuCaiUtils.getPageMirrorMarkdown(entry.sou || '')
+      }
       const pageCtx: WuCaiPageContext = {
         title: WuCaiUtils.formatPageTitle(entry.title),
         url: entry.url,
         wucaiurl: entry.wucaiurl || '',
         readurl: entry.readurl || '',
-        tags: WuCaiUtils.formatTags(entry.tags, isHashTag),
+        tags,
+        trimtags,
         pagenote: WuCaiUtils.formatPageNote(entry.pageNote, isHashTag),
         pagescore: entry.pageScore || 0,
         isstar,
-        highlights: WuCaiUtils.formatHighlights(entry.highlights, exportCfg),
+        highlights: WuCaiUtils.formatHighlights(entry.url, entry.highlights, exportCfg),
         highlightcount,
         createat: WuCaiUtils.formatTime(entry.createAt),
         createat_ts: entry.createAt,
@@ -366,6 +384,7 @@ export default class WuCaiPlugin extends Plugin {
         diffupdateat_ts: WuCaiUtils.getDiffDay(entry.createAt, entry.updateAt),
         domain: urldomain,
         domain2: urldomain2,
+        mdcontent,
       }
       const noteFile = await this.app.vault.getAbstractFileByPath(outFilename)
       const isNoteExists = noteFile && noteFile instanceof TFile
@@ -409,7 +428,8 @@ export default class WuCaiPlugin extends Plugin {
     const writeStyle = this.settings.exportConfig.writeStyle
     logger({ msg: 'download', checkUpdate, flagx, lastCursor2 })
     try {
-      response = await this.callApi(API_URL_DOWNLOAD, {
+      const lastUrl = this.settings.downloadEP + API_URL_DOWNLOAD
+      response = await this.callApi(lastUrl, {
         lastCursor2,
         noteIdXs,
         flagx,
@@ -439,7 +459,6 @@ export default class WuCaiPlugin extends Plugin {
     // const zipReader = new zip.ZipReader(blobReader)
     // const entries = await zipReader.getEntries()
 
-    // 不用提示了
     // this.notice('Saving files...', false, 30)
 
     // 是否为定向同步
@@ -635,6 +654,63 @@ export default class WuCaiPlugin extends Plugin {
       name: 'Sync your data now',
       callback: () => {
         this.startSync()
+      },
+    })
+    this.addCommand({
+      id: 'archive',
+      name: 'Archive this file',
+      editorCallback(editor, view) {
+        const activeFilePath = view.file.path
+        const noteid = WuCaiUtils.getNoteIdxFromFilePath(activeFilePath)
+        if (noteid.length <= 0) {
+          thiz.notice('error, error file title', true, 4, true)
+          return
+        }
+        try {
+          thiz.callApi(API_URL_ARCHIVE_NOTE, { noteid }).then(async function (rsp) {
+            if (!rsp || !rsp.ok) {
+              logger({ msg: 'WuCai Official plugin: bad response in delete server note: ', rsp })
+              thiz.handleSyncError(null, thiz.getErrorMessageFromResponse(rsp))
+              return
+            }
+            let data2 = await rsp.json()
+            console.log({ data2 })
+            if (thiz.checkResponseBody(null, data2)) {
+              return
+            }
+            thiz.notice('archive file success', true, 4, true)
+          })
+        } catch (e) {
+          logger({ msg: 'WuCai Official plugin: archive note, error ', e })
+        }
+      },
+    })
+    this.addCommand({
+      id: 'deletefromserver',
+      name: 'Delete this file from server',
+      editorCallback(editor, view) {
+        const activeFilePath = view.file.path
+        const noteid = WuCaiUtils.getNoteIdxFromFilePath(activeFilePath)
+        if (noteid.length <= 0) {
+          thiz.notice('error, error file title', true, 4, true)
+          return
+        }
+        try {
+          thiz.callApi(API_URL_DELETE_SERVER_NOTE, { noteid }).then(async function (rsp) {
+            if (!rsp || !rsp.ok) {
+              logger({ msg: 'WuCai Official plugin: bad response in delete server note: ', rsp })
+              thiz.handleSyncError(null, thiz.getErrorMessageFromResponse(rsp))
+              return
+            }
+            let data2 = await rsp.json()
+            if (thiz.checkResponseBody(null, data2)) {
+              return
+            }
+            thiz.notice('delete file success', true, 4, true)
+          })
+        } catch (e) {
+          logger({ msg: 'WuCai Official plugin: delete server note, error ', e })
+        }
       },
     })
     // this.addCommand({
