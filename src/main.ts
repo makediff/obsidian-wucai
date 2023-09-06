@@ -49,6 +49,7 @@ const DEFAULT_SETTINGS: WuCaiPluginSettings = {
   notePaths: {},
   exportConfig: {
     pageMirrorStyle: 2,
+    truncateTile255: 0,
     writeStyle: 2,
     highlightStyle: 1,
     annotationStyle: 1,
@@ -310,6 +311,16 @@ export default class WuCaiPlugin extends Plugin {
       filename = titleTpl
     }
 
+    const exportCfg = this.settings.exportConfig
+
+    if (exportCfg.truncateTile255 > 0) {
+      let suffLen = `-${entry.noteIdX}.md`.length
+      let remainLen = 210 - suffLen
+      if (remainLen > 0) {
+        filename = filename.substring(0, remainLen)
+      }
+    }
+
     // 根据规则生成文件路径
     filename = `${this.settings.wuCaiDir}/${filename}-${entry.noteIdX}.md`
 
@@ -338,7 +349,6 @@ export default class WuCaiPlugin extends Plugin {
 
     this.settings.notePaths[entry.noteIdX] = outFilename
 
-    const exportCfg = this.settings.exportConfig
     try {
       // const contents = await entry.getData(new zip.TextWriter())
       if (!isDirChecked) {
@@ -359,8 +369,10 @@ export default class WuCaiPlugin extends Plugin {
       const tags = WuCaiUtils.formatTags(entry.tags, isHashTag)
       const trimtags = WuCaiUtils.trimTags(entry.tags)
       let mdcontent = ''
+      let ispagemirror = false
       if (exportCfg.pageMirrorStyle !== 2 && entry.sou && entry.sou.length > 0) {
         mdcontent = await WuCaiUtils.getPageMirrorMarkdown(entry.sou || '')
+        ispagemirror = true
       }
       const pageCtx: WuCaiPageContext = {
         title: WuCaiUtils.formatPageTitle(entry.title),
@@ -372,6 +384,7 @@ export default class WuCaiPlugin extends Plugin {
         pagenote: WuCaiUtils.formatPageNote(entry.pageNote, isHashTag),
         pagescore: entry.pageScore || 0,
         isstar,
+        ispagemirror,
         highlights: WuCaiUtils.formatHighlights(entry.url, entry.highlights, exportCfg),
         highlightcount,
         createat: WuCaiUtils.formatTime(entry.createAt),
@@ -1005,7 +1018,7 @@ class WuCaiSettingTab extends PluginSettingTab {
     }
     const help = containerEl.createEl('p')
     help.innerHTML =
-      "Question? Please see our <a href='https://www.dotalk.cn/s/M7'>feedback</a><br/> Client id is: <b>" +
+      "Question? Please see our <a href='https://www.dotalk.cn/s/M7'>feedback</a> or view <a href='https://www.dotalk.cn/s/KH'>changelog</a><br/> Client id is: <b>" +
       clientId +
       '</b>'
   }

@@ -16,6 +16,7 @@ interface WuCaiExportConfig {
   tagStyle: number
   obTemplate: string
   pageMirrorStyle: number
+  truncateTile255: number
 }
 
 // 初始化接口返回的字段
@@ -51,6 +52,7 @@ interface WuCaiPageContext {
   pagenote: string
   pagescore: number // 星标
   isstar: boolean //是否星标
+  ispagemirror: boolean //是否剪藏
   createat: string
   updateat: string
   noteid: string
@@ -132,7 +134,8 @@ interface FilterStyle1Options {
   prefix: string // 每行的前导符
   trim: boolean // 是否对行进行trim
   anno: string // 想法前导符
-  color: string // 是否在第一行加一个颜色，优先级2
   color_tags: Array<string> // 颜色优先级1
+  color: string // 是否在第一行加一个颜色，优先级2，颜色块的名字
   color_line: boolean // 是否对整行加颜色，优先级3
+  refid: boolean // 是否划线块引用
 }

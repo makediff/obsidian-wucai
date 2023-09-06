@@ -96,10 +96,11 @@ export class WuCaiTemplates {
       let notePrefix = options.prefix || '' // 划线前缀
       let anno = item.annonation || '' // 想法
       let annoPrefix = options.anno || '' // 想法的前缀
-      let colorTags = options.color_tags || []
+      let colorChar = options.color_tags || [] // 颜色字符
       let color = options.color || '' // 颜色占位符
       let colorLine = options.color_line || false // 是否需要对整行加颜色
       let slotId = item.slotId || 1
+      let appendHighlightRefid = options.refid && true
       let ret = []
       if (imageUrl) {
         ret.push(`${notePrefix}![](${imageUrl})`)
@@ -110,15 +111,14 @@ export class WuCaiTemplates {
         let lines = note.split(/\n/)
         let lineCount = 0
         for (let line of lines) {
-          line = line.replace(/^\s+|\s+$/g, '')
-          if (!line || line.length <= 0) {
+          line = WuCaiUtils.trimString(line)
+          if (!line) {
             continue
           }
-          if (lineCount == 0 && colorTags && colorTags.length > 0) {
-            color = colorTags[slotId - 1]
+          if (lineCount == 0 && colorChar && colorChar.length > 0) {
+            color = colorChar[slotId - 1]
           }
           if (color && lineCount == 0) {
-            // only add color block to head of first line
             ret.push(`${notePrefix}<font color="${item.color}">${color}</font>` + line)
           } else if (colorLine) {
             ret.push(`${notePrefix}<font color="${item.color}">${line}</font>`)
@@ -128,18 +128,44 @@ export class WuCaiTemplates {
           lineCount++
         }
       }
+
       if (anno) {
-        // 23.8.1 如果想法是一个标签，自动加个空格
         if (WuCaiUtils.detectIsMardownFormat(anno)) {
           ret.push(anno)
         } else {
-          if (annoPrefix.length > 0 && /^#/.test(anno)) {
-            annoPrefix += ' '
+          let newLineAnnoPrefix = WuCaiUtils.getPrefxFromAnnoPrefix(annoPrefix)
+          let arrAnno = anno.split(/\n/)
+          let lineCount = 0
+          for (let line of arrAnno) {
+            line = WuCaiUtils.trimString(line)
+            if (line.length <= 0) {
+              continue
+            }
+            if (annoPrefix) {
+              // 标签自动识别
+              if (/^#/.test(line)) {
+                line = ' ' + line
+              }
+              if (0 == lineCount) {
+                line = annoPrefix + line
+              } else {
+                line = newLineAnnoPrefix + line
+              }
+            }
+            ret.push(line)
+            lineCount++
           }
-          ret.push(annoPrefix + anno)
         }
       }
-      if (ret.length > 0) {
+
+      let tmpLen = ret.length
+      if (appendHighlightRefid) {
+        if (tmpLen > 0) {
+          ret[tmpLen - 1] += ' ^' + item.refid
+        }
+      }
+
+      if (tmpLen > 0) {
         ret.push('')
       }
       return ret.join('\n')

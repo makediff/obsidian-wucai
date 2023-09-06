@@ -159,6 +159,25 @@ export class WuCaiUtils {
     return moment(date).format(format)
   }
 
+  static trimString(s: string): string {
+    if (!s || s.length <= 0) {
+      return ''
+    }
+    return s.replace(/^\s+|\s+$/g, '')
+  }
+
+  static getPrefxFromAnnoPrefix(s: string): string {
+    if (!s || s.length <= 0) {
+      return ''
+    }
+    // fetch prefix from annoPrefix, if it start with - or >
+    let idx = s.indexOf(' ')
+    if (idx > 0) {
+      return s.substring(0, idx + 1)
+    }
+    return ''
+  }
+
   // 按换行符切割后去两边空行，合并空行
   static trimWithLine(coretxt: string): string {
     if (!coretxt || coretxt.length <= 0) {
