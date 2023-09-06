@@ -166,6 +166,16 @@ export class WuCaiUtils {
     return s.replace(/^\s+|\s+$/g, '')
   }
 
+  static truncateFileName255(filename: string, suffLen: number): string {
+    let startIdx = filename.lastIndexOf('/')
+    let tLen = filename.length - (startIdx + 1) + suffLen
+    let maxLen = 210
+    if (tLen <= maxLen) {
+      return filename
+    }
+    return filename.substring(0, startIdx + 1 + (maxLen - suffLen))
+  }
+
   static getPrefxFromAnnoPrefix(s: string): string {
     if (!s || s.length <= 0) {
       return ''

@@ -312,13 +312,9 @@ export default class WuCaiPlugin extends Plugin {
     }
 
     const exportCfg = this.settings.exportConfig
-
     if (exportCfg.truncateTile255 > 0) {
       let suffLen = `-${entry.noteIdX}.md`.length
-      let remainLen = 210 - suffLen
-      if (remainLen > 0) {
-        filename = filename.substring(0, remainLen)
-      }
+      filename = WuCaiUtils.truncateFileName255(filename, suffLen)
     }
 
     // 根据规则生成文件路径
