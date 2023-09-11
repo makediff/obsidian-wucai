@@ -380,8 +380,10 @@ export class WuCaiUtils {
     if (!tags || tags.length <= 0) {
       return ''
     }
-    let strTags = tags.join(',')
-    return strTags.replace(/[#\[\]]/g, '')
+    return tags
+      .join(',')
+      .replace(/[#\[\]]/g, '')
+      .replace(/\s+/g, '-')
   }
 
   // 根据配置生成 tag 列表
@@ -393,6 +395,7 @@ export class WuCaiUtils {
       if (!tag || tag.length <= 0) {
         return
       }
+      tag = tag.replace(/\s+/g, '-')
       let isHash = tag[0] === '#'
       let isInner = tag[0] === '['
       if (isHash && isHashTag) {
@@ -532,40 +535,41 @@ export class WuCaiUtils {
     }
     let idx = entryUrl.indexOf('#')
     if (idx >= 0) {
-      entryUrl = entryUrl.substring(0, idx)
+      return ''
+      // entryUrl = entryUrl.substring(0, idx)
     }
     return entryUrl + refurl
   }
 
   static async getPageMirrorMarkdown(urlx: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      if (!urlx || urlx.length <= 0) {
+    let rsp = await fetch(urlx, { method: 'GET' })
+    if (!rsp || rsp.status !== 200 || !rsp.ok) {
+      return new Promise((resolve, reject) => {
         resolve('')
-        return
-      }
-      fetch(urlx, { method: 'GET' })
-        .then((rsp) => {
-          if (rsp.ok) {
-            return rsp.text()
-          } else {
-            return ''
-          }
-        })
-        .then((rsptext) => {
-          if (!rsptext || rsptext.length <= 0) {
-            return ''
-          }
-          let idx = rsptext.indexOf(':')
-          if (idx <= 0) {
+      })
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        rsp
+          .text()
+          .then((rsptext) => {
+            if (!rsptext || rsptext.length <= 0) {
+              return ''
+            }
+            let idx = rsptext.indexOf(':')
+            if (idx <= 0) {
+              resolve('')
+              return
+            }
+            let b = parseInt(rsptext.substring(0, idx))
+            resolve(rsptext.substring(b + idx + 1))
+          })
+          .catch((rsp) => {
             resolve('')
-            return
-          }
-          let b = parseInt(rsptext.substring(0, idx))
-          resolve(rsptext.substring(b + idx + 1))
-        })
-        .catch((rsp) => {
-          resolve('')
-        })
+          })
+      } catch (fetcherr) {
+        resolve('')
+      }
     })
   }
 }

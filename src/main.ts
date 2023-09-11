@@ -29,8 +29,8 @@ const API_URL_ACK = '/apix/openapi/wucai/sync/ack'
 const API_URL_DELETE_SERVER_NOTE = '/apix/openapi/wucai/sync/delete'
 const API_URL_ARCHIVE_NOTE = '/apix/openapi/wucai/sync/archive'
 
-const WRITE_STYLE_OVERWRITE = 1
-const WRITE_STYLE_APPEND = 2
+const WRITE_STYLE_OVERWRITE = 1 // 覆盖
+const WRITE_STYLE_APPEND = 2 // 局部更新
 
 // define our initial settings
 const DEFAULT_SETTINGS: WuCaiPluginSettings = {
@@ -367,7 +367,9 @@ export default class WuCaiPlugin extends Plugin {
       let mdcontent = ''
       let ispagemirror = false
       if (exportCfg.pageMirrorStyle !== 2 && entry.sou && entry.sou.length > 0) {
-        mdcontent = await WuCaiUtils.getPageMirrorMarkdown(entry.sou || '')
+        if (exportCfg.writeStyle == WRITE_STYLE_OVERWRITE) {
+          mdcontent = await WuCaiUtils.getPageMirrorMarkdown(entry.sou || '')
+        }
         ispagemirror = true
       }
       const pageCtx: WuCaiPageContext = {

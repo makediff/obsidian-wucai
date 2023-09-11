@@ -10,7 +10,7 @@ interface WuCaiExportLastCursor {
 
 interface WuCaiExportConfig {
   titleTemplate: string // 标题模板格式
-  writeStyle: number // 写文件方式：1覆盖（默认），2追加
+  writeStyle: number // 写文件方式：1覆盖，2局部
   highlightStyle: number
   annotationStyle: number
   tagStyle: number
@@ -48,7 +48,7 @@ interface WuCaiPageContext {
   wucaiurl: string // 五彩后台链接
   readurl: string //全文剪藏链接
   tags: string // 包含前缀的标签，如 #read
-  trimtags: string // 去掉前缀的标签
+  trimtags: string // 去掉前缀的标签，如 read
   pagenote: string
   pagescore: number // 星标
   isstar: boolean //是否星标
@@ -78,6 +78,7 @@ interface HighlightInfo {
   refid: string // 划线id
   refurl: string // 划线跳转链接
   url: string // 跳转原文url
+  annotags: string // 想法的标签
 }
 
 interface NoteEntry {
