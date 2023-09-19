@@ -46,11 +46,14 @@ export class WuCaiTemplates {
 ## 划线列表
 {% block highlights %}
 {% for item in highlights %}
-{{ item | style1({prefix:"> ", anno:"> __想法__：", color:"█  "}) }}
+{{ item | style1({prefix:"> ", anno:"> 想法：", color:"█  "}) }}
 {% endfor %}
 {% endblock %}
 
-## 其他
+## 全文剪藏
+{% block mdcontent %}
+{{mdcontent}}
+{% endblock %}
 
 `
   constructor() {
@@ -88,6 +91,57 @@ export class WuCaiTemplates {
 
     // see https://help.obsidian.md/Editing+and+formatting/Callouts
 
+    this.templateEnv.addFilter(
+      'style_dailynote',
+      function (highlights: Array<HighlightInfo>, options: FilterStyleDailyOptions) {
+        options = options || ({} as FilterStyleDailyOptions)
+        let ret = []
+        let groupby = options.groupby || 'YYYY-MM-DD HH:mm'
+        let groupHighlights: { [key: string]: Array<HighlightInfo> } = {}
+        let groupNames: Array<string> = []
+        let groupNamesMap: { [key: string]: number } = {}
+        for (let highlight of highlights) {
+          let ts = WuCaiUtils.formatTime(highlight.createat || highlight.updateat || 0, groupby)
+          if (groupNamesMap[ts] == undefined) {
+            groupNamesMap[ts] = 1
+            groupNames.push(ts)
+            groupHighlights[ts] = []
+          }
+          groupHighlights[ts].push(highlight)
+        }
+        groupNamesMap = undefined // help for gc
+        highlights = undefined // help for gc
+        for (let gname of groupNames) {
+          let rootlevel = 0
+          ret.push(`- ${gname}`)
+          let level = rootlevel + 1
+          let highlightPrefix = WuCaiUtils.repeatStr('\t', level)
+          let annoPrefix = WuCaiUtils.repeatStr('\t', level + 1)
+          for (let highlight of groupHighlights[gname]) {
+            let notes = (highlight.note || '').split('\n')
+            for (let note of notes) {
+              if (!note || WuCaiUtils.isOnlyDateTimeLine(note)) {
+                continue
+              }
+              let p1 = WuCaiUtils.detectIsMardownFormat(note) ? '' : '- '
+              ret.push(`${highlightPrefix}${p1}${note}`)
+            }
+            if (highlight.annonation) {
+              let notes = (highlight.annonation || '').split('\n')
+              for (let note of notes) {
+                if (!note || WuCaiUtils.isOnlyDateTimeLine(note)) {
+                  continue
+                }
+                let p1 = WuCaiUtils.detectIsMardownFormat(note) ? '' : '- '
+                ret.push(`${annoPrefix}${p1}${note}`)
+              }
+            }
+          }
+        }
+        return ret.join('\n')
+      }
+    )
+
     // 默认样式1
     this.templateEnv.addFilter('style1', function (item: HighlightInfo, options: FilterStyle1Options) {
       options = options || ({} as FilterStyle1Options)
@@ -99,7 +153,7 @@ export class WuCaiTemplates {
       let colorChar = options.color_tags || [] // 颜色字符
       let color = options.color || '' // 颜色占位符
       let colorLine = options.color_line || false // 是否需要对整行加颜色
-      let slotId = item.slotId || 1
+      let slotId = item.slotid || 1
       let appendHighlightRefid = options.refid && true
       let ret = []
       if (imageUrl) {

@@ -303,6 +303,7 @@ export default class WuCaiPlugin extends Plugin {
       const nameParams = {
         title: WuCaiUtils.normalTitle(entry.title),
         createat_ts: entry.createAt,
+        updateat_ts: Math.max(entry.updateAt, entry.createAt),
         domain2: urldomain2 || '', // 仅保留2级的域名
         domain: urldomain || '', // 当前url的域名
       }
@@ -379,10 +380,12 @@ export default class WuCaiPlugin extends Plugin {
         readurl: entry.readurl || '',
         tags,
         trimtags,
+        notetype: entry.noteType || 1,
         pagenote: WuCaiUtils.formatPageNote(entry.pageNote, isHashTag),
         pagescore: entry.pageScore || 0,
         isstar,
         ispagemirror,
+        isdailynote: entry.noteType === 3,
         highlights: WuCaiUtils.formatHighlights(entry.url, entry.highlights, exportCfg),
         highlightcount,
         createat: WuCaiUtils.formatTime(entry.createAt),

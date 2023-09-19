@@ -51,8 +51,10 @@ interface WuCaiPageContext {
   trimtags: string // 去掉前缀的标签，如 read
   pagenote: string
   pagescore: number // 星标
-  isstar: boolean //是否星标
+  notetype: number // 笔记类型
+  isstar: boolean
   ispagemirror: boolean //是否剪藏
+  isdailynote: boolean
   createat: string
   updateat: string
   noteid: string
@@ -71,10 +73,11 @@ interface WuCaiPageContext {
 interface HighlightInfo {
   note: string // 文字划线
   imageUrl: string // 图片划线
-  updateAt: number // 更新时间
+  updateat: number
+  createat: number
   annonation: string // 划线的想法
   color: string // 颜色
-  slotId: number // 颜色id
+  slotid: number // 颜色id
   refid: string // 划线id
   refurl: string // 划线跳转链接
   url: string // 跳转原文url
@@ -89,6 +92,7 @@ interface NoteEntry {
   sou: string
   noteIdX: string
   noteId: number
+  noteType: number
   createAt: number
   updateAt: number
   pageNote: string
@@ -139,4 +143,8 @@ interface FilterStyle1Options {
   color: string // 是否在第一行加一个颜色，优先级2，颜色块的名字
   color_line: boolean // 是否对整行加颜色，优先级3
   refid: boolean // 是否划线块引用
+}
+
+interface FilterStyleDailyOptions {
+  groupby: string
 }

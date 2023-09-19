@@ -339,9 +339,28 @@ export class WuCaiUtils {
   // }
 
   // 通过时间（秒）获得一个默认的时间格式
-  static formatTime(ts: number): string {
+  static formatTime(ts: number, fdt: string = 'YYYY-MM-DD HH:mm'): string {
+    if (ts <= 0) {
+      return ''
+    }
     let d1 = new Date(ts * 1000)
-    return this.formatDateTime(d1, 'YYYY-MM-DD HH:mm')
+    return this.formatDateTime(d1, fdt)
+  }
+
+  static isOnlyDateTimeLine(s: string): boolean {
+    // 2023-09-08 13:36:12
+    return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s) && true
+  }
+
+  static repeatStr(s: string, n: number): string {
+    if (n <= 0 || !s || s.length <= 0) {
+      return ''
+    }
+    let ret = []
+    for (let i = 0; i < n; i++) {
+      ret.push(s)
+    }
+    return ret.join('')
   }
 
   static formatPageNote(note: string, isHashTag: boolean): string {
@@ -360,13 +379,17 @@ export class WuCaiUtils {
     if (!highlights || highlights.length <= 0) {
       return highlights
     }
-    for (let i = 0; i < highlights.length; i++) {
-      let highlight = highlights[i]
+    for (let highlight of highlights) {
       if (!highlight) {
         continue
       }
-      if (!isHashTag && highlight.annonation && highlight.annonation.length > 0) {
-        highlight.annonation = this.convertHashTagToBackLink(highlight.annonation)
+      if (!isHashTag) {
+        if (highlight.annonation && highlight.annonation.length > 0) {
+          highlight.annonation = this.convertHashTagToBackLink(highlight.annonation)
+        }
+        if (highlight.note && highlight.note.length > 0) {
+          highlight.note = this.convertHashTagToBackLink(highlight.note)
+        }
       }
       if (entryUrl && highlight.refurl) {
         highlight.refurl = WuCaiUtils.getHighlightUrl(entryUrl, highlight.refurl)
