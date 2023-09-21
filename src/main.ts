@@ -368,9 +368,7 @@ export default class WuCaiPlugin extends Plugin {
       let mdcontent = ''
       let ispagemirror = false
       if (exportCfg.pageMirrorStyle !== 2 && entry.sou && entry.sou.length > 0) {
-        if (exportCfg.writeStyle == WRITE_STYLE_OVERWRITE) {
-          mdcontent = await WuCaiUtils.getPageMirrorMarkdown(entry.sou || '')
-        }
+        mdcontent = await WuCaiUtils.getPageMirrorMarkdown(entry.sou || '')
         ispagemirror = true
       }
       const pageCtx: WuCaiPageContext = {
@@ -482,7 +480,6 @@ export default class WuCaiPlugin extends Plugin {
     // 预编译标题模板
     const exportCfg = this.settings.exportConfig
     let titleTpl: string = exportCfg.titleTemplate || 'wucai-{{ createat_ts | date("YYYY-MM-DD") }}'
-    // 去掉标题里的换行
     titleTpl = titleTpl.replace(/[\n]+/, '').trim()
 
     for (const entry of entries) {
@@ -1017,10 +1014,16 @@ class WuCaiSettingTab extends PluginSettingTab {
       let el = containerEl.createEl('div', { cls: 'wc-info-container' })
       containerEl.find('.wc-setting-connect > .setting-item-control ').prepend(el)
     }
+    new Setting(containerEl)
+      .setName('WuCai Client ID')
+      .setDesc('This is your WuCai client id')
+      .addTextArea((text) => {
+        text.inputEl.rows = 2
+        text.inputEl.cols = 24
+        text.setValue(clientId)
+      })
     const help = containerEl.createEl('p')
     help.innerHTML =
-      "Question? Please see our <a href='https://www.dotalk.cn/s/M7'>feedback</a> or view <a href='https://www.dotalk.cn/s/KH'>changelog</a><br/> Client id is: <b>" +
-      clientId +
-      '</b>'
+      "Question? Please see our <a href='https://www.dotalk.cn/s/M7'>feedback</a> or view <a href='https://www.dotalk.cn/s/KH'>changelog</a></b>"
   }
 }
