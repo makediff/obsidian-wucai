@@ -118,6 +118,10 @@ export class WuCaiTemplates {
           let highlightPrefix = WuCaiUtils.repeatStr('\t', level)
           let annoPrefix = WuCaiUtils.repeatStr('\t', level + 1)
           for (let highlight of groupHighlights[gname]) {
+            if (highlight.imageUrl && highlight.imageUrl.length > 0) {
+              ret.push(`${highlightPrefix}- ![](${highlight.imageUrl})`)
+              continue
+            }
             let notes = (highlight.note || '').split('\n')
             for (let note of notes) {
               if (!note || WuCaiUtils.isOnlyDateTimeLine(note)) {
