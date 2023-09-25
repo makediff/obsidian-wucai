@@ -111,7 +111,7 @@ interface NoteIdInfo {
 interface WuCaiPluginSettings {
   token: string
   wuCaiDir: string
-  isSyncing: boolean
+  // isSyncing: boolean
   frequency: string
   triggerOnLoad: boolean
   lastSyncFailed: boolean

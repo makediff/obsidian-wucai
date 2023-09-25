@@ -38,7 +38,6 @@ const DEFAULT_SETTINGS: WuCaiPluginSettings = {
   wuCaiDir: 'WuCai',
   frequency: '0', // 0代表默认手动同步
   triggerOnLoad: true,
-  isSyncing: false,
   lastSyncFailed: false,
   refreshNotes: false,
   notesToRefresh: [], // 待更新文件列表
@@ -89,6 +88,7 @@ export default class WuCaiPlugin extends Plugin {
   scheduleInterval: null | number = null
   statusBar: StatusBar
   pageTemplate: WuCaiTemplates // 渲染模板
+  isSyncing: boolean
 
   // 对接口返回的内容进行检查
   // 如果有错误返回 true, 否则返回 false
@@ -126,7 +126,6 @@ export default class WuCaiPlugin extends Plugin {
   }
 
   handleSyncError(buttonContext: ButtonComponent, msg: string) {
-    this.clearSettingsAfterRun()
     this.settings.lastSyncFailed = true
     this.saveSettings()
     if (buttonContext) {
@@ -137,12 +136,7 @@ export default class WuCaiPlugin extends Plugin {
     }
   }
 
-  clearSettingsAfterRun() {
-    this.settings.isSyncing = false
-  }
-
   handleSyncSuccess(buttonContext: ButtonComponent, msg: string = 'Synced', lastCursor: string = '') {
-    this.clearSettingsAfterRun()
     this.settings.lastSyncFailed = false
     if (lastCursor) {
       let tmpCursor = this.getLastCursor(lastCursor, this.settings.lastCursor)
@@ -186,7 +180,13 @@ export default class WuCaiPlugin extends Plugin {
       this.settings.notesToRefresh = []
       this.settings.notePaths = {}
     }
-    logger({ msg: 'onload last cursor', lastCursor: this.settings.lastCursor, flagx, isDirDeleted })
+    logger({
+      msg: 'onload last cursor',
+      lastCursor: this.settings.lastCursor,
+      flagx,
+      isDirDeleted,
+      isSync: this.isSyncing,
+    })
     let lastCursor2 = this.settings.lastCursor
     let params = { noteDirDeleted: isDirDeleted, lastCursor2 }
     let rsp
@@ -198,11 +198,13 @@ export default class WuCaiPlugin extends Plugin {
     if (!rsp || !rsp.ok) {
       logger({ msg: 'WuCai Official plugin: bad response in exportInit: ', rsp })
       this.handleSyncError(buttonContext, this.getErrorMessageFromResponse(rsp))
+      this.isSyncing = false
       return
     }
 
     let data2 = await rsp.json()
     if (this.checkResponseBody(buttonContext, data2)) {
+      this.isSyncing = false
       return
     }
 
@@ -226,8 +228,12 @@ export default class WuCaiPlugin extends Plugin {
       this.handleSyncSuccess(buttonContext, 'Synced', this.settings.lastCursor)
       let msg = 'Latest WuCai sync already happened on your other device. Data should be up to date'
       this.notice(msg, false, 4, true)
+      logger({ msg: 'syncing -> false', flagx: flagx + ' init+ck+synced' })
+      this.isSyncing = false
     } else if ('EXPIRED' == initRet.taskStatus) {
       this.handleSyncError(buttonContext, 'sync service expried')
+      logger({ msg: 'syncing -> false', flagx: flagx + ' init+ck+expired' })
+      this.isSyncing = false
     } else if (WAITING_STATUSES.includes(initRet.taskStatus)) {
       if (initRet.notesExported > 0) {
         const progressMsg = localize('Exporting WuCai data') + ` (${initRet.notesExported} / ${initRet.totalNotes}) ...`
@@ -245,6 +251,8 @@ export default class WuCaiPlugin extends Plugin {
       await this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx + ' init+ck', true)
     } else {
       this.handleSyncError(buttonContext, 'Sync failed,' + initRet.taskStatus)
+      logger({ msg: 'syncing -> false', flagx: flagx + ' init+ck+exception' })
+      this.isSyncing = false
     }
   }
 
@@ -438,7 +446,7 @@ export default class WuCaiPlugin extends Plugin {
   ): Promise<void> {
     let response
     const writeStyle = this.settings.exportConfig.writeStyle
-    logger({ msg: 'download', checkUpdate, flagx, lastCursor2 })
+    logger({ msg: 'download', checkUpdate, flagx, lastCursor2, isSyncing: this.isSyncing })
     try {
       const lastUrl = this.settings.downloadEP + API_URL_DOWNLOAD
       response = await this.callApi(lastUrl, {
@@ -455,12 +463,20 @@ export default class WuCaiPlugin extends Plugin {
     if (!response || !response.ok) {
       logger({ msg: 'WuCai Official plugin: bad response in downloadArchive: ', response })
       this.handleSyncError(buttonContext, this.getErrorMessageFromResponse(response))
+      if (!checkUpdate) {
+        logger({ msg: 'syncing -> false', flagx: flagx + ' download+exception' })
+        this.isSyncing = false
+      }
       return
     }
 
     // let blob = await response.blob()
     const data2 = await response.json()
     if (this.checkResponseBody(buttonContext, data2)) {
+      if (!checkUpdate) {
+        logger({ msg: 'syncing -> false', flagx: flagx + ' download+nil' })
+        this.isSyncing = false
+      }
       return
     }
 
@@ -470,8 +486,6 @@ export default class WuCaiPlugin extends Plugin {
     // const blobReader = new zip.BlobReader(blob)
     // const zipReader = new zip.ZipReader(blobReader)
     // const entries = await zipReader.getEntries()
-
-    // this.notice('Saving files...', false, 30)
 
     // 是否为定向同步
     const isPartsDownload: boolean = noteIdXs.length > 0
@@ -514,6 +528,8 @@ export default class WuCaiPlugin extends Plugin {
         // 如果检查更新完成，则开始增量同步
         this.downloadArchive(this.settings.lastCursor, [], buttonContext, flagx, !checkUpdate)
       } else {
+        logger({ msg: 'syncing -> false', flagx: flagx + ' download+done' })
+        this.isSyncing = false
         await this.acknowledgeSyncCompleted(buttonContext)
         this.handleSyncSuccess(buttonContext, 'Synced!', this.settings.lastCursor)
         this.notice('WuCai sync completed', true, 1, true)
@@ -552,10 +568,16 @@ export default class WuCaiPlugin extends Plugin {
     window.clearInterval(this.scheduleInterval)
     this.scheduleInterval = null
     if (!milliseconds) {
-      // we got manual option
       return
     }
-    this.scheduleInterval = window.setInterval(() => this.exportInit(null, true, 'schedule init'), milliseconds)
+    this.scheduleInterval = window.setInterval(() => {
+      if (this.isSyncing) {
+        return
+      }
+      this.isSyncing = true
+      logger(['start sync, schedule', this.settings.lastCursor, this.isSyncing])
+      this.exportInit(null, true, 'schedule init')
+    }, milliseconds)
     this.registerInterval(this.scheduleInterval)
   }
 
@@ -593,12 +615,12 @@ export default class WuCaiPlugin extends Plugin {
   }
 
   startSync() {
-    logger(['started sync', this.settings.isSyncing])
-    if (this.settings.isSyncing) {
+    logger(['sync status', this.isSyncing])
+    if (this.isSyncing) {
       this.notice('WuCai sync already in progress', true)
       return
     }
-    this.settings.isSyncing = true
+    this.isSyncing = true
     this.saveSettings()
     this.exportInit(null, false, 'startSync init')
   }
@@ -790,22 +812,26 @@ export default class WuCaiPlugin extends Plugin {
     // })
     this.addSettingTab(new WuCaiSettingTab(this.app, this))
     await this.configureSchedule()
-    this.settings.isSyncing = false
-    if (this.settings.token && this.settings.triggerOnLoad && !this.settings.isSyncing) {
+    this.isSyncing = false // 启动的时候初始化非同步状态
+    if (this.settings.token && this.settings.triggerOnLoad && !this.isSyncing) {
       // 因为加载关系，如果目录没有创建，可能是ob还没有启动完成
       const dirInfo = this.app.vault.getAbstractFileByPath(this.settings.wuCaiDir)
       const isDirNotExists = !dirInfo || !(dirInfo instanceof TFolder)
       if (isDirNotExists) {
         this.app.workspace.onLayoutReady(() => {
           // https://forum.obsidian.md/t/plugins-with-a-lot-to-do-at-startup-being-async-onlayoutready/26205
-          logger(['onload last cursor 1', this.settings.lastCursor])
+          logger(['onload last cursor 1', this.settings.lastCursor, this.isSyncing])
+          if (this.isSyncing) {
+            return
+          }
+          this.isSyncing = true
           this.exportInit(null, true, 'onload + not exists')
         })
       } else {
+        this.isSyncing = true
         await this.exportInit(null, true, 'onload + exists 2')
-        await this.refreshNoteExport() // 同步上次出错的网页
+        // await this.refreshNoteExport() // 同步上次出错的网页
         logger(['onload last cursor 2', this.settings.lastCursor])
-        // await this.exportInit(null, true, 'onload + exists')
       }
     }
   }
@@ -881,6 +907,7 @@ class WuCaiSettingTab extends PluginSettingTab {
   constructor(app: App, plugin: WuCaiPlugin) {
     super(app, plugin)
     this.plugin = plugin
+    this.plugin.isSyncing = false
   }
 
   display(): void {
@@ -906,13 +933,13 @@ class WuCaiSettingTab extends PluginSettingTab {
             .setTooltip('Once the sync begins, you can close this plugin page')
             .setButtonText('Initiate Sync')
             .onClick(async () => {
-              if (this.plugin.settings.isSyncing) {
+              if (this.plugin.isSyncing) {
                 new Notice('WuCai sync already in progress')
               } else {
                 this.plugin.clearInfoStatus(containerEl)
-                this.plugin.settings.isSyncing = true
                 await this.plugin.saveData(this.plugin.settings)
                 button.setButtonText('Syncing...')
+                this.plugin.isSyncing = true
                 await this.plugin.exportInit(button)
               }
             })
@@ -937,6 +964,10 @@ class WuCaiSettingTab extends PluginSettingTab {
             .setPlaceholder('Defaults to: WuCai')
             .setValue(this.plugin.settings.wuCaiDir)
             .onChange(async (value) => {
+              if (this.plugin.isSyncing) {
+                new Notice('WuCai sync already in progress')
+                return
+              }
               this.plugin.settings.wuCaiDir = normalizePath(value || 'WuCai')
               await this.plugin.saveSettings()
             })
@@ -952,10 +983,7 @@ class WuCaiSettingTab extends PluginSettingTab {
           dropdown.addOption('180', 'Every 3 hour')
           dropdown.addOption((12 * 60).toString(), 'Every 12 hours')
           dropdown.addOption((24 * 60).toString(), 'Every 24 hours')
-
-          // select the currently-saved option
           dropdown.setValue(this.plugin.settings.frequency)
-
           dropdown.onChange((newValue) => {
             this.plugin.settings.frequency = newValue
             this.plugin.saveSettings()
