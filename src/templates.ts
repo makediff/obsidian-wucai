@@ -1,6 +1,7 @@
 import nunjucks from 'nunjucks'
 import { WuCaiUtils } from './utils'
 
+const strref = typeof 's'
 export class WuCaiTemplates {
   static leftHolder = '{{'
   static rightHolder = '}}'
@@ -146,6 +147,46 @@ export class WuCaiTemplates {
       }
     )
 
+    this.templateEnv.addFilter('yaml_text', function (v: any) {
+      if (!v) {
+        return ''
+      }
+      if (typeof v !== strref) {
+        return 'error type'
+      }
+      return ' |-\n  ' + v.replace(/\n/g, '\n  ')
+    })
+
+    this.templateEnv.addFilter('setfield', function (v: any, fname: string) {
+      if (!fname || !v) {
+        return ''
+      }
+      if (fname.indexOf(':') < 0) {
+        fname += ':'
+      }
+      return `${fname} ${v}`
+    })
+
+    this.templateEnv.addFilter('yaml_list', function (v: any, sep: string = ',', dup = false) {
+      if (!v) {
+        return ''
+      }
+      if (!sep) {
+        sep = ','
+      }
+      let ret: Array<string> = []
+      if (typeof v === strref) {
+        ret = v.split(sep)
+      } else if (Array.isArray(v)) {
+        ret = v
+      }
+      ret = ret.filter((x: string) => x)
+      if (!ret || ret.length <= 0) {
+        return ''
+      }
+      return WuCaiUtils.toYAMLList(ret)
+    })
+
     // 默认样式1
     this.templateEnv.addFilter('style1', function (item: HighlightInfo, options: FilterStyle1Options) {
       options = options || ({} as FilterStyle1Options)
@@ -163,7 +204,7 @@ export class WuCaiTemplates {
       let ret = []
       if ('math' === highlighttype) {
         ret.push(`\n$$\n${note}\n$$\n`)
-      } else if (('image' === highlighttype) || imageUrl) {
+      } else if ('image' === highlighttype || imageUrl) {
         ret.push(`${notePrefix}![](${imageUrl})`)
       } else if (WuCaiUtils.detectIsMardownFormat(note)) {
         ret.push(note)

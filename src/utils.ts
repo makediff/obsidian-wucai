@@ -371,10 +371,17 @@ export class WuCaiUtils {
   }
 
   static highlightTypeMaps: { [key: number]: string } = {
-    1: "highlight", 2: "image", 3: "math", 4: "quote"
+    1: 'highlight',
+    2: 'image',
+    3: 'math',
+    4: 'quote',
   }
 
-  static formatHighlights(entryUrl: string, highlights: Array<HighlightInfoAPI>, exportCfg: WuCaiExportConfig): Array<HighlightInfo> {
+  static formatHighlights(
+    entryUrl: string,
+    highlights: Array<HighlightInfoAPI>,
+    exportCfg: WuCaiExportConfig
+  ): Array<HighlightInfo> {
     if (!highlights) {
       return []
     }
@@ -417,25 +424,33 @@ export class WuCaiUtils {
     return ret
   }
 
-  static mergeTagsAndTrim(t1: string, t2: string): string {
-    t1 = t1 || ''
-    t2 = t2 || ''
-    let t3 = (t1 + ',' + t2).replace(/[#\[\]]/g, '').replace(/\s+/g, '-')
-    let t4 = t3.split(',').filter((x) => x)
-    t3 = '' // help for gc
-    if (!t4) {
+  // to yaml list
+  static toYAMLList(a: Array<string>): string {
+    if (!a || a.length <= 0) {
       return ''
     }
-    if (t4.length <= 1) {
-      return t4[0]
-    }
+    return '\n  - ' + a.join('\n  - ')
+  }
+
+  static mergeTagsAndTrim(t1: Array<string>, t2: string): string {
+    t1 = t1 || []
+    t2 = t2 || ''
+    let t2tag = t1
+      .concat(t2.split(','))
+      .filter((x) => x)
+      .map((x) => {
+        return x.replace(/[#\[\]]/g, '').replace(/\s+/g, '-')
+      })
     let ret: { [key: string]: number } = {}
-    for (let tg of t4) {
+    for (let tg of t2tag) {
+      if (!t2tag) {
+        continue
+      }
       if (ret[tg] === undefined) {
         ret[tg] = 1
       }
     }
-    return Object.keys(ret).join(',')
+    return this.toYAMLList(Object.keys(ret))
   }
 
   // for Obsidian frontmatter
@@ -443,11 +458,13 @@ export class WuCaiUtils {
     if (!tags || tags.length <= 0) {
       return ''
     }
-    return tags
+    let ret = tags
       .filter((x) => x)
-      .join(',')
-      .replace(/[#\[\]]/g, '')
-      .replace(/\s+/g, '-')
+      .map((x) => {
+        return x.replace(/[#\[\]]/g, '').replace(/\s+/g, '-')
+      })
+      .filter((x) => x)
+    return this.toYAMLList(ret as Array<string>)
   }
 
   // 根据配置生成 tag 列表

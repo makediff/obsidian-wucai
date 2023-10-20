@@ -373,7 +373,7 @@ export default class WuCaiPlugin extends Plugin {
       const isstar = entry.pageScore > 0
       const tags = WuCaiUtils.formatTags(entry.tags, isHashTag)
       const trimtags = WuCaiUtils.trimTags(entry.tags)
-      const mergedtags = WuCaiUtils.mergeTagsAndTrim(trimtags, entry.notetags)
+      const mergedtags = WuCaiUtils.mergeTagsAndTrim(entry.tags, entry.notetags)
       let mdcontent = ''
       let ispagemirror = false
       if (exportCfg.pageMirrorStyle !== 2 && entry.sou && entry.sou.length > 0) {
