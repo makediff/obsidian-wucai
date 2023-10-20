@@ -29,6 +29,9 @@
     color: var(--success-color);
 }
 
+.wc-setting-danger {
+    color: #DB5461;
+}
 
 img[alt=wc-book-cover] {
     max-height: 200px;

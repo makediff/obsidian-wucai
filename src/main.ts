@@ -365,20 +365,23 @@ export default class WuCaiPlugin extends Plugin {
           }
         }
       }
+
+      entry.highlights = entry.highlights || []
+      entry.pageScore = entry.pageScore || 0
+
       const isHashTag = exportCfg.tagStyle === 1
-      let highlightcount = 0
-      if (entry.highlights) {
-        highlightcount = entry.highlights.length
-      }
-      const isstar = entry.pageScore && entry.pageScore > 0
+      const isstar = entry.pageScore > 0
       const tags = WuCaiUtils.formatTags(entry.tags, isHashTag)
       const trimtags = WuCaiUtils.trimTags(entry.tags)
+      const mergedtags = WuCaiUtils.mergeTagsAndTrim(trimtags, entry.notetags)
       let mdcontent = ''
       let ispagemirror = false
       if (exportCfg.pageMirrorStyle !== 2 && entry.sou && entry.sou.length > 0) {
         mdcontent = await WuCaiUtils.getPageMirrorMarkdown(entry.sou || '')
         ispagemirror = true
       }
+      const isdailynote = entry.noteType === 3
+      const notetype = isdailynote ? 'dailynote' : 'page'
       const pageCtx: WuCaiPageContext = {
         title: WuCaiUtils.formatPageTitle(entry.title),
         url: entry.url,
@@ -386,14 +389,15 @@ export default class WuCaiPlugin extends Plugin {
         readurl: entry.readurl || '',
         tags,
         trimtags,
-        notetype: entry.noteType || 1,
+        mergedtags,
+        notetype,
         pagenote: WuCaiUtils.formatPageNote(entry.pageNote, isHashTag),
-        pagescore: entry.pageScore || 0,
+        pagescore: entry.pageScore,
         isstar,
         ispagemirror,
-        isdailynote: entry.noteType === 3,
+        isdailynote,
         highlights: WuCaiUtils.formatHighlights(entry.url, entry.highlights, exportCfg),
-        highlightcount,
+        highlightcount: entry.highlights.length,
         createat: WuCaiUtils.formatTime(entry.createAt),
         createat_ts: entry.createAt,
         updateat: WuCaiUtils.formatTime(entry.updateAt),
@@ -401,6 +405,8 @@ export default class WuCaiPlugin extends Plugin {
         noteid: entry.noteIdX,
         citekey: entry.citekey || '',
         author: entry.author || '',
+        publishat: WuCaiUtils.formatTime(entry.publishat),
+        publishat_ts: entry.publishat || 0,
         diffupdateat_ts: WuCaiUtils.getDiffDay(entry.createAt, entry.updateAt),
         domain: urldomain,
         domain2: urldomain2,
@@ -1000,6 +1006,22 @@ class WuCaiSettingTab extends PluginSettingTab {
             this.plugin.saveSettings()
           })
         })
+      // new Setting(containerEl)
+      //   .setName('Clear up sync location')
+      //   .setDesc('If cleared, will be resync all of your files')
+      //   .setClass('wc-setting-danger')
+      //   .addButton((button) => {
+      //     button.setCta().setButtonText('Clear up sync location')
+      //     button.onClick(async (val) => {
+      //       if (this.plugin.isSyncing) {
+      //         new Notice('WuCai sync already in progress')
+      //         return
+      //       }
+      //       this.plugin.settings.lastCursor = ''
+      //       await this.plugin.saveSettings()
+      //       new Notice('Clear up Success')
+      //     })
+      //   })
       // new Setting(containerEl)
       //   .setName('Resync deleted files')
       //   .setDesc(

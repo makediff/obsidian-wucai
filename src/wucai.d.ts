@@ -49,9 +49,10 @@ interface WuCaiPageContext {
   readurl: string //全文剪藏链接
   tags: string // 包含前缀的标签，如 #read
   trimtags: string // 去掉前缀的标签，如 read
+  mergedtags: string // 合并页面标签和笔记标签的tag列表
   pagenote: string
   pagescore: number // 星标
-  notetype: number // 笔记类型
+  notetype: string // 笔记类型, page, dailynote
   isstar: boolean
   ispagemirror: boolean //是否剪藏
   isdailynote: boolean
@@ -62,26 +63,44 @@ interface WuCaiPageContext {
   updateat_ts: number // 时间戳
   citekey: string
   author: string
+  publishat: string
+  publishat_ts: number
   diffupdateat_ts: number // 不在同一天的更新时间，如果是同一天则为0
   domain: string
   domain2: string
-  highlights: Array<HighlightInfo> // @todo 需要增加中间结构
+  highlights: Array<HighlightInfo>
   highlightcount: number // 划线数量
   mdcontent: string // 剪藏的markdown
 }
 
-interface HighlightInfo {
+// 接口返回的字段
+interface HighlightInfoAPI {
   note: string // 文字划线
   imageUrl: string // 图片划线
   updateat: number
   createat: number
-  annonation: string // 划线的想法
+  highlighttype: number
+  annonation: string // 划线的想法(单词拼写错误)
   color: string // 颜色
   slotid: number // 颜色id
   refid: string // 划线id
   refurl: string // 划线跳转链接
   url: string // 跳转原文url
-  annotags: string // 想法的标签
+}
+
+// https://www.yuque.com/makediff/wucai/snoza8gdix68yfdn#dZ2Jr
+interface HighlightInfo {
+  note: string // 文字划线
+  imageUrl: string // 图片划线
+  updateat_ts: number
+  createat_ts: number
+  type: string // 划线类型
+  annonation: string // 划线的想法(单词拼写错误)
+  annotation: string // 解决单词拼写错误
+  color: string // 颜色
+  slotid: number // 颜色id
+  refid: string // 划线id
+  refurl: string // 划线跳转链接
 }
 
 interface NoteEntry {
@@ -99,8 +118,10 @@ interface NoteEntry {
   pageScore: number
   citekey: string
   author: string
-  tags: Array<string>
-  highlights: Array<HighlightInfo>
+  publishat: number
+  tags: Array<string> // 页面标签
+  notetags: string // 笔记标签
+  highlights: Array<HighlightInfoAPI>
 }
 
 interface NoteIdInfo {
@@ -111,22 +132,17 @@ interface NoteIdInfo {
 interface WuCaiPluginSettings {
   token: string
   wuCaiDir: string
-  // isSyncing: boolean
   frequency: string
   triggerOnLoad: boolean
   lastSyncFailed: boolean
   reimportShowConfirmation: boolean
-
   lastCursor: string
   exportConfig: WuCaiExportConfig
   downloadEP: string
-
   refreshNotes: boolean
   notesToRefresh: Array<string> // 更新出现异常的noteidx
   dataVersion: number // 本地数据版本号
-
-  // 记录笔记对应的路径, key 是笔记id, value 是路径
-  notePaths: { [key: string]: string }
+  notePaths: { [key: string]: string } // 记录笔记对应的路径, key 是笔记id, value 是路径
 }
 
 interface FilterPrettyOptions {

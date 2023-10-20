@@ -101,7 +101,7 @@ export class WuCaiTemplates {
         let groupNames: Array<string> = []
         let groupNamesMap: { [key: string]: number } = {}
         for (let highlight of highlights) {
-          let ts = WuCaiUtils.formatTime(highlight.createat || highlight.updateat || 0, groupby)
+          let ts = WuCaiUtils.formatTime(highlight.createat_ts || highlight.updateat_ts || 0, groupby)
           if (groupNamesMap[ts] == undefined) {
             groupNamesMap[ts] = 1
             groupNames.push(ts)
@@ -154,16 +154,18 @@ export class WuCaiTemplates {
       let notePrefix = options.prefix || '' // 划线前缀
       let anno = item.annonation || '' // 想法
       let annoPrefix = options.anno || '' // 想法的前缀
+      let highlighttype = item.type || 'highlight'
       let colorChar = options.color_tags || [] // 颜色字符
       let color = options.color || '' // 颜色占位符
       let colorLine = options.color_line || false // 是否需要对整行加颜色
       let slotId = item.slotid || 1
       let appendHighlightRefid = options.refid && true
       let ret = []
-      if (imageUrl) {
+      if ('math' === highlighttype) {
+        ret.push(`\n$$\n${note}\n$$\n`)
+      } else if (('image' === highlighttype) || imageUrl) {
         ret.push(`${notePrefix}![](${imageUrl})`)
       } else if (WuCaiUtils.detectIsMardownFormat(note)) {
-        // current highlight is a markdown format content, present it
         ret.push(note)
       } else {
         let lines = note.split(/\n/)

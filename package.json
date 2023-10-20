@@ -1,6 +1,6 @@
 {
   "name": "wucai-highlights-official",
-  "version": "23.9.25",
+  "version": "23.10.20",
   "description": "Automatically syncs your WuCai highlights with Obsidian.",
   "main": "main.js",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "rollup --config rollup.config.js ",
     "dist": "npm run build && mkdir -p dist && cp styles.css main.js manifest.json dist"
   },
+  "type": "module",
   "keywords": [
     "obsidian",
     "wucai",

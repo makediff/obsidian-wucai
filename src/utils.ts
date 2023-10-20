@@ -370,32 +370,72 @@ export class WuCaiUtils {
     return this.convertHashTagToBackLink(note) || ''
   }
 
-  static formatHighlights(
-    entryUrl: string,
-    highlights: Array<HighlightInfo>,
-    exportCfg: WuCaiExportConfig
-  ): Array<HighlightInfo> {
-    const isHashTag = exportCfg.tagStyle === 1
-    if (!highlights || highlights.length <= 0) {
-      return highlights
+  static highlightTypeMaps: { [key: number]: string } = {
+    1: "highlight", 2: "image", 3: "math", 4: "quote"
+  }
+
+  static formatHighlights(entryUrl: string, highlights: Array<HighlightInfoAPI>, exportCfg: WuCaiExportConfig): Array<HighlightInfo> {
+    if (!highlights) {
+      return []
     }
-    for (let highlight of highlights) {
-      if (!highlight) {
+    const isHashTag = exportCfg.tagStyle === 1
+    let ret: Array<HighlightInfo> = []
+    for (let old of highlights) {
+      if (!old) {
         continue
       }
+      const type = old.highlighttype || 1
+      let one: HighlightInfo = {
+        note: old.note || '',
+        imageUrl: old.imageUrl,
+        updateat_ts: old.updateat,
+        createat_ts: old.createat,
+        type: this.highlightTypeMaps[type] || 'highlight',
+        annonation: old.annonation || '',
+        annotation: '',
+        color: old.color,
+        slotid: old.slotid,
+        refid: old.refid,
+        refurl: old.refurl,
+      }
       if (!isHashTag) {
-        if (highlight.annonation && highlight.annonation.length > 0) {
-          highlight.annonation = this.convertHashTagToBackLink(highlight.annonation)
+        if (one.annonation) {
+          one.annonation = this.convertHashTagToBackLink(one.annonation)
         }
-        if (highlight.note && highlight.note.length > 0) {
-          highlight.note = this.convertHashTagToBackLink(highlight.note)
+        if (one.note) {
+          one.note = this.convertHashTagToBackLink(one.note)
         }
       }
-      if (entryUrl && highlight.refurl) {
-        highlight.refurl = WuCaiUtils.getHighlightUrl(entryUrl, highlight.refurl)
+      if (entryUrl && one.refurl) {
+        one.refurl = WuCaiUtils.getHighlightUrl(entryUrl, one.refurl)
+      } else {
+        one.refurl = ''
+      }
+      one.annotation = one.annonation // 为了做字段兼容
+      ret.push(one)
+    }
+    return ret
+  }
+
+  static mergeTagsAndTrim(t1: string, t2: string): string {
+    t1 = t1 || ''
+    t2 = t2 || ''
+    let t3 = (t1 + ',' + t2).replace(/[#\[\]]/g, '').replace(/\s+/g, '-')
+    let t4 = t3.split(',').filter((x) => x)
+    t3 = '' // help for gc
+    if (!t4) {
+      return ''
+    }
+    if (t4.length <= 1) {
+      return t4[0]
+    }
+    let ret: { [key: string]: number } = {}
+    for (let tg of t4) {
+      if (ret[tg] === undefined) {
+        ret[tg] = 1
       }
     }
-    return highlights
+    return Object.keys(ret).join(',')
   }
 
   // for Obsidian frontmatter
@@ -404,6 +444,7 @@ export class WuCaiUtils {
       return ''
     }
     return tags
+      .filter((x) => x)
       .join(',')
       .replace(/[#\[\]]/g, '')
       .replace(/\s+/g, '-')
@@ -556,10 +597,10 @@ export class WuCaiUtils {
     if (!refurl || refurl.length <= 0) {
       return ''
     }
+    entryUrl = entryUrl.replace(/#+$/, '')
     let idx = entryUrl.indexOf('#')
     if (idx >= 0) {
-      return ''
-      // entryUrl = entryUrl.substring(0, idx)
+      return entryUrl
     }
     return entryUrl + refurl
   }
