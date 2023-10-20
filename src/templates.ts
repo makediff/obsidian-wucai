@@ -190,7 +190,6 @@ export class WuCaiTemplates {
     // 默认样式1
     this.templateEnv.addFilter('style1', function (item: HighlightInfo, options: FilterStyle1Options) {
       options = options || ({} as FilterStyle1Options)
-      let imageUrl = item.imageUrl || ''
       let note = item.note || '' // 划线
       let notePrefix = options.prefix || '' // 划线前缀
       let anno = item.annonation || '' // 想法
@@ -204,8 +203,8 @@ export class WuCaiTemplates {
       let ret = []
       if ('math' === highlighttype) {
         ret.push(`\n$$\n${note}\n$$\n`)
-      } else if ('image' === highlighttype || imageUrl) {
-        ret.push(`${notePrefix}![](${imageUrl})`)
+      } else if ('image' === highlighttype) {
+        ret.push(`${notePrefix}![](${note})`)
       } else if (WuCaiUtils.detectIsMardownFormat(note)) {
         ret.push(note)
       } else {

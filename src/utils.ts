@@ -393,7 +393,7 @@ export class WuCaiUtils {
       }
       const type = old.highlighttype || 1
       let one: HighlightInfo = {
-        note: old.note || '',
+        note: old.note || old.imageUrl || '',
         imageUrl: old.imageUrl,
         updateat_ts: old.updateat,
         createat_ts: old.createat,
