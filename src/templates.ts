@@ -157,7 +157,7 @@ export class WuCaiTemplates {
       return ' |-\n  ' + v.replace(/\n/g, '\n  ')
     })
 
-    this.templateEnv.addFilter('setfield', function (v: any, fname: string) {
+    this.templateEnv.addFilter('yaml_field', function (v: any, fname: string) {
       if (!fname || !v) {
         return ''
       }
