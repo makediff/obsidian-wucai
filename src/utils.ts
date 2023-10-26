@@ -558,11 +558,15 @@ export class WuCaiUtils {
     if (!s) {
       return ''
     }
-    let ux = new URL(s)
-    if (!ux) {
+    try {
+      let ux = new URL(s)
+      if (!ux) {
+        return ''
+      }
+      return ux.hostname.toLocaleLowerCase()
+    } catch (error) {
       return ''
     }
-    return ux.hostname.toLocaleLowerCase()
   }
 
   static getDomain2ByDomain(urlDomain: string): string {

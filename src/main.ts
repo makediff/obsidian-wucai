@@ -306,6 +306,8 @@ export default class WuCaiPlugin extends Plugin {
     let filename: string
     let urldomain: string = WuCaiUtils.getDomainByUrl(entry.url)
     let urldomain2: string = WuCaiUtils.getDomain2ByDomain(urldomain)
+    const isdailynote = entry.noteType === 3
+    const notetype = isdailynote ? 'dailynote' : 'page'
     if (WuCaiTemplates.isNeedRender(titleTpl)) {
       const titleTemplate = this.pageTemplate.getTitleTemplateByStr(titleTpl)
       const nameParams = {
@@ -314,6 +316,8 @@ export default class WuCaiPlugin extends Plugin {
         updateat_ts: Math.max(entry.updateAt, entry.createAt),
         domain2: urldomain2 || '', // 仅保留2级的域名
         domain: urldomain || '', // 当前url的域名
+        notetype,
+        isdailynote,
       }
       filename = titleTemplate.render(nameParams)
     } else {
@@ -380,8 +384,6 @@ export default class WuCaiPlugin extends Plugin {
         mdcontent = await WuCaiUtils.getPageMirrorMarkdown(entry.sou || '')
         ispagemirror = true
       }
-      const isdailynote = entry.noteType === 3
-      const notetype = isdailynote ? 'dailynote' : 'page'
       const pageCtx: WuCaiPageContext = {
         title: WuCaiUtils.formatPageTitle(entry.title),
         url: entry.url,
