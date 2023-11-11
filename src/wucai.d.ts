@@ -17,6 +17,7 @@ interface WuCaiExportConfig {
   obTemplate: string
   pageMirrorStyle: number
   truncateTile255: number
+  obQuery: string
 }
 
 // 初始化接口返回的字段

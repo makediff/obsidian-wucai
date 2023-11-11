@@ -55,6 +55,7 @@ const DEFAULT_SETTINGS: WuCaiPluginSettings = {
     tagStyle: 1,
     obTemplate: '',
     titleTemplate: '',
+    obQuery: '',
   },
 }
 
@@ -327,7 +328,7 @@ export default class WuCaiPlugin extends Plugin {
     const exportCfg = this.settings.exportConfig
     if (exportCfg.truncateTile255 > 0) {
       let suffLen = `-${entry.noteIdX}.md`.length
-      filename = WuCaiUtils.truncateFileName255(filename, suffLen)
+      filename = WuCaiUtils.truncateFileName255(filename, suffLen, exportCfg.truncateTile255)
     }
 
     // 根据规则生成文件路径
@@ -382,6 +383,7 @@ export default class WuCaiPlugin extends Plugin {
       let ispagemirror = false
       if (exportCfg.pageMirrorStyle !== 2 && entry.sou && entry.sou.length > 0) {
         mdcontent = await WuCaiUtils.getPageMirrorMarkdown(entry.sou || '')
+        mdcontent = WuCaiUtils.formatPageMirror(mdcontent)
         ispagemirror = true
       }
       const pageCtx: WuCaiPageContext = {
@@ -453,8 +455,8 @@ export default class WuCaiPlugin extends Plugin {
     checkUpdate: boolean = false
   ): Promise<void> {
     let response
-    const writeStyle = this.settings.exportConfig.writeStyle
-    logger({ msg: 'download', checkUpdate, flagx, lastCursor2, isSyncing: this.isSyncing })
+    const { writeStyle, obQuery } = this.settings.exportConfig
+    logger({ msg: 'download', checkUpdate, flagx, lastCursor2, isSyncing: this.isSyncing, obQuery })
     try {
       const lastUrl = this.settings.downloadEP + API_URL_DOWNLOAD
       response = await this.callApi(lastUrl, {
@@ -464,6 +466,7 @@ export default class WuCaiPlugin extends Plugin {
         writeStyle,
         out: BGCONSTS.OUT,
         checkUpdate,
+        q: obQuery || '',
       })
     } catch (e) {
       logger({ msg: 'WuCai Official plugin: fetch failed in downloadArchive: ', e })
@@ -1071,7 +1074,7 @@ class WuCaiSettingTab extends PluginSettingTab {
       .setDesc('This is your WuCai client id')
       .addTextArea((text) => {
         text.inputEl.rows = 2
-        text.inputEl.cols = 24
+        text.inputEl.cols = 12
         text.setValue(clientId)
       })
     const help = containerEl.createEl('p')

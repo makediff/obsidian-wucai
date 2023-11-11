@@ -166,10 +166,12 @@ export class WuCaiUtils {
     return s.replace(/^\s+|\s+$/g, '')
   }
 
-  static truncateFileName255(filename: string, suffLen: number): string {
+  static truncateFileName255(filename: string, suffLen: number, maxLen: number): string {
     let startIdx = filename.lastIndexOf('/')
     let tLen = filename.length - (startIdx + 1) + suffLen
-    let maxLen = 210
+    if (maxLen <= 64 || maxLen >= 255) {
+      maxLen = 64
+    }
     if (tLen <= maxLen) {
       return filename
     }
@@ -217,8 +219,7 @@ export class WuCaiUtils {
     title = title.replace(/[\s\t\n]+/g, ' ')
     // https://blog.csdn.net/xiejx618/article/details/17471819
     // \ / : * ? " < > |
-    // 23.5.31 修复短横线需要转移问题
-    title = title.replace(/[\~\\、\/\*"'<>%\$#&;；{}()=+\-:?？。，！!（）\|]/g, '')
+    title = title.replace(/[\~\\、\/\*"'<>%\$#&;；:?？。，！!\|]/g, '')
     if (title.length <= 0) {
       return 'No title'
     }
@@ -467,6 +468,14 @@ export class WuCaiUtils {
     return this.toYAMLList(ret as Array<string>)
   }
 
+  static formatPageMirror(s: string): string {
+    s = s || ''
+    if (!s) {
+      return ''
+    }
+    return s.replace(/g1proxy\.nostrabc\.com/g, 'g1proxy.wimg.site')
+  }
+
   // 根据配置生成 tag 列表
   static formatTags(tags: Array<string>, isHashTag: boolean): string {
     let ret: Array<string> = []
@@ -557,6 +566,9 @@ export class WuCaiUtils {
   static getDomainByUrl(s: string): string {
     if (!s) {
       return ''
+    }
+    if (/^www\./.test(s)) {
+      s = 'https://' + s
     }
     try {
       let ux = new URL(s)
