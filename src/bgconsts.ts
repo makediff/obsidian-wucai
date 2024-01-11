@@ -3,8 +3,8 @@ export class BGCONSTS {
   static SERVICE_ID: number = 7
   static MARKET_INFO: string = 'obsidian-plugin'
   static ENDPOINT: string = 'obsidianwucai'
-  static VERSION: string = '23.11.11'
-  static VERSION_NUM: number = 231111
+  static VERSION: string = '24.1.11'
+  static VERSION_NUM: number = 240111
   static IS_DEBUG: boolean = false
   static TEST_TOKEN: string = ''
   static BASE_URL: string = 'https://marker.dotalk.cn'
