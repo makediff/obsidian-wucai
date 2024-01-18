@@ -22,4 +22,4 @@ Note: This plugin requires a subscription with [希果壳五彩](https://www.dot
 
 ## Support
 
-* Please see our [feedback](https://feedback.dotalk.cn/note/AAbe7f4782.html) 🙂
+* Please see our [feedback](https://feedback.dotalk.cn/note/OlA9f2ef3ee.html) 🙂

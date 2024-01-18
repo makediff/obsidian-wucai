@@ -1,6 +1,6 @@
 {
   "name": "wucai-highlights-official",
-  "version": "24.1.11",
+  "version": "24.1.19",
   "description": "Automatically syncs your WuCai highlights with Obsidian.",
   "main": "main.js",
   "scripts": {
@@ -24,7 +24,9 @@
     "@zip.js/zip.js": "^2.2.33",
     "moment": "^2.29.4",
     "nunjucks": "^3.2.4",
-    "open": "^7.3.1"
+    "open": "^7.3.1",
+    "rollup-plugin-cleanup": "^3.2.1",
+    "rollup-plugin-uglify": "^6.0.4"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^15.1.0",
