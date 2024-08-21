@@ -1,6 +1,6 @@
 {
   "name": "wucai-highlights-official",
-  "version": "24.8.9",
+  "version": "24.8.21",
   "description": "Automatically syncs your WuCai highlights with Obsidian.",
   "main": "main.js",
   "scripts": {
@@ -15,7 +15,10 @@
     "五彩插件",
     "highlight",
     "highlighter",
-    "web highlight"
+    "web highlight",
+    "annotation",
+    "web annotation",
+    "page note"
   ],
   "author": "希果壳五彩",
   "license": "MIT",
