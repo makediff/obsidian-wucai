@@ -1,7 +1,7 @@
 {
   "name": "wucai-highlights-official",
   "version": "24.10.18",
-  "description": "Automatically syncs your WuCai highlights with Obsidian.",
+  "description": "Automatically sync your WuCai highlights to Obsidian.",
   "main": "main.js",
   "scripts": {
     "dev": "rollup --config rollup.config.js -w ",
