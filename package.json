@@ -1,6 +1,6 @@
 {
   "name": "wucai-highlights-official",
-  "version": "24.11.19",
+  "version": "24.11.26",
   "description": "Automatically sync your WuCai highlights to Obsidian.",
   "main": "main.js",
   "scripts": {
@@ -12,7 +12,7 @@
   "keywords": [
     "obsidian",
     "wucai",
-    "五彩插件",
+    "\u4e94\u5f69\u63d2\u4ef6",
     "highlight",
     "highlighter",
     "web highlight",
@@ -20,7 +20,7 @@
     "web annotation",
     "page note"
   ],
-  "author": "希果壳五彩",
+  "author": "\u5e0c\u679c\u58f3\u4e94\u5f69",
   "license": "MIT",
   "dependencies": {
     "@types/nunjucks": "^3.2.2",
