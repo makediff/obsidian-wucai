@@ -3,8 +3,8 @@
   "name": "WuCai highlights Official",
   "minAppVersion": "0.12.10",
   "description": "Official WuCai highlights <-> Obsidian integration",
-  "author": "希果壳五彩",
-  "authorUrl": "https://www.dotalk.cn/product/wucai",
+  "author": "WuCai",
+  "authorUrl": "https://wucainote.com/",
   "isDesktopOnly": false,
-  "version": "26.4.11"
+  "version": "26.11.7"
 }
