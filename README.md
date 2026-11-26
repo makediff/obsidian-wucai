@@ -38,7 +38,7 @@ Which items are exported and how they are formatted is configured on the [WuCai 
 - [Template variables](https://wucainote.com/en/docs/sync/obsidian.html#vars) · [Template functions](https://wucainote.com/en/docs/sync/template-ob-fn.html)
 - [Sync & export overview](https://wucainote.com/en/docs/sync/)
 - [Chinese docs](https://wucainote.com/docs/) · [English docs](https://wucainote.com/en/docs/)
-- [WuCai website](https://wucainote.com/) · [Changelog](https://wucainote.com/en/docs/changelog.html)
+- [WuCai website](https://wucainote.com/) · [Changelog](https://wucainote.com/docs/changelog.html)
 
 ## Support
 
