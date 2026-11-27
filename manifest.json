@@ -3,7 +3,7 @@
   "name": "WuCai highlights Official",
   "minAppVersion": "0.12.10",
   "description": "Official WuCai highlights <-> Obsidian integration",
-  "author": "WuCai",
+  "author": "makediff",
   "authorUrl": "https://wucainote.com/",
   "isDesktopOnly": false,
   "version": "26.21.37"
